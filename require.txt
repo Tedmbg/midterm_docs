@@ -1,0 +1,25 @@
+> Board to use ✈️ Esp32  has a limitation for highly complex task.
+> 🛳️🛳️🛳️🛳️ advantages
+    -Balance of processing power and powerefficiency
+    - Built-in Wi-Fi and Bluetooth for wirelessconnectivity
+    - Real-time dataprocessing andcommunication support
+    - Suitable for battery-powered applications🛳️
+
+> we need controll valves to regulate the amount of water being removed either by opening or closing them. solenod valves are 
+commonly used.
+> 🚧 we need a database to be able  to store soil mosture levels, crop water consumption rates, recomemnded irrigation
+schedles. we should also store amount of water in the tank, amount of water that has been used at what intervals, rates
+of evaporation type of the crop  number of water requirements.
+
+>🗽 additionally an API will be used to be able to get real time weather  to make irrigation decisions or use the 
+light sensor.or what type of sensor can i use.
+
+> 🥁 communication modules
+- We need a website that the farmer can be able to see the amount of water used and the time irrigation took place.
+- We can also send the farmer a message with the information.
+- The farmer in the website should be able to see real time updates on soil mosture sensor,Weather conditions and adjust
+irrigation settings remotely.
+- We will connect with GSM (global system of mobile communications). to use data an later to use wifi.
+
+>🥁 improvements and suggetions
+-offer diffrent crop and  requirements 
