@@ -2,7 +2,7 @@
 > 🛳️🛳️🛳️🛳️ advantages
     -Balance of processing power and powerefficiency
     - Built-in Wi-Fi and Bluetooth for wirelessconnectivity
-    - Real-time dataprocessing andcommunication support
+    - Real-time dataprocessing and communication support
     - Suitable for battery-powered applications🛳️
 
 > we need controll valves to regulate the amount of water being removed either by opening or closing them. solenod valves are 
@@ -11,10 +11,9 @@ commonly used.
 schedles. we should also store amount of water in the tank, amount of water that has been used at what intervals, rates
 of evaporation type of the crop  number of water requirements.
 
->🗽 additionally an API will be used to be able to get real time weather  to make irrigation decisions or use the 
-light sensor.or what type of sensor can i use.
+>🗽 additionally an API will be used to be able to get real time weather  to make irrigation decisions or use the light sensor.or what type of sensor can i use.
 
-> 🥁 communication modules
+> 🥁 communication modules .
 - We need a website that the farmer can be able to see the amount of water used and the time irrigation took place.
 - We can also send the farmer a message with the information.
 - The farmer in the website should be able to see real time updates on soil mosture sensor,Weather conditions and adjust
@@ -22,4 +21,54 @@ irrigation settings remotely.
 - We will connect with GSM (global system of mobile communications). to use data an later to use wifi.
 
 >🥁 improvements and suggetions
--offer diffrent crop and  requirements 
+-offer diffrent crop and  requirements.
+-Offer crop nutrient sensor look at npk soil sensor.
+- Soloar powered.
+- Calculate the rate of evaporation.
+
+
+
+>The web APP
+- farmer will choose their crop type
+-set irrigation schedules 
+- monitor soil moisture levels.
+- recieve notifications and alerts  about amount of water spent the amount of water remaining in the tank,send faults.
+- send weather data i.e it raining etc..
+- check the soil health.
+
+🎦🎦🎦🎦🎦🎦 hardware we are using🎦🎦🎦🎦🎦
+- LM7805 voltage regulator  to supply esp32
+- MT3608 buck-boost converter was used to boost 7.4v to 12v to power DC solenoid valve.
+- 18650 batteries3.7V
+- CR2032 battery3.0V
+- LM7805 regulatorInput: 7.4V; Output: 5.0V
+- MT3608 buck-boost converterInput: 7.4V; Output: 12.0V
+- ESP32 microcontrollerInput (Vin): 5.0V; Output (GPIO pins): 3.3V
+- Real time clock (RTC) module2.2V - 5.5V
+- Capacitive soil moisture sensors5.0V
+- LCD I2C display module5.0V
+- Relay module5.0V
+- DC solenoid valve12.0V
+
+
+⛷ LM7805 Voltage Regulator: Converts higher voltage (like 7.4V from batteries) down to a stable 5V to power components like the ESP32 microcontroller.
+
+⛷ MT3608 Buck-Boost Converter: Boosts the 7.4V from your batteries to 12V to power the DC solenoid valve, ensuring it gets the voltage it needs to operate.
+
+⛷ 18650 Batteries (3.7V): Rechargeable lithium-ion batteries used as the main power source for your system, providing 3.7V per battery.
+
+⛷ CR2032 Battery (3.0V): A small button-cell battery used to power devices with very low power consumption, like the Real-Time Clock (RTC) module.
+
+⛷ ESP32 Microcontroller: The brain of the system, responsible for controlling the various components (sensors, valves, etc.) and managing the logic for the irrigation system. It operates on 5V but outputs 3.3V on its GPIO pins.
+
+⛷ Real-Time Clock (RTC) Module: Keeps track of time, allowing the irrigation system to operate on a schedule, even if the main power source is interrupted.
+
+⛷ Capacitive Soil Moisture Sensors: Measure soil moisture levels to determine when to trigger the irrigation system.
+
+⛷ LCD I2C Display Module: Displays information such as system status, soil moisture levels, and time, using I2C communication for easy connection to the ESP32.
+
+⛷ Relay Module: Acts as a switch to control high-power devices like the solenoid valve, allowing the ESP32 to turn them on and off safely.
+
+⛷ DC Solenoid Valve: Controls the flow of water in the irrigation system. It requires 12V to operate, and is opened or closed based on the signals from the ESP32 via the relay.
+
+💬💬💬 look at small irrigation schemes in Asia small irrigation
