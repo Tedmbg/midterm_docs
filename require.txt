@@ -19,7 +19,7 @@ of evaporation type of the crop  number of water requirements.
 - The farmer in the website should be able to see real time updates on soil mosture sensor,Weather conditions and adjust
 irrigation settings remotely.
 - We will connect with GSM (global system of mobile communications). to use data an later to use wifi.
-
+ 
 >🥁 improvements and suggetions
 -offer diffrent crop and  requirements.
 -Offer crop nutrient sensor look at npk soil sensor.
@@ -49,6 +49,8 @@ weather application,show data obtained from the sensors.
 - track the rate of evaporation.
 - check amount of water in the tank.
 - open the solenoid valve and pass water.
+- see when the plant pestosides need to be added to the crops.
+- when entering the growth stages include initial,crop development,midseasonstage or late season stage.
 
 🎦🎦🎦🎦🎦🎦 hardware we are using🎦🎦🎦🎦🎦
 - LM7805 voltage regulator  to supply esp32
@@ -63,6 +65,9 @@ weather application,show data obtained from the sensors.
 - LCD I2C display module5.0V
 - Relay module5.0V
 - DC solenoid valve12.0V
+- Temprature sensors & humidity DHT22 : DHT11 to measurre air temprature.
+- sunlight intensity  pyranometer
+
 
 
 ⛷ LM7805 Voltage Regulator: Converts higher voltage (like 7.4V from batteries) down to a stable 5V to power components like the ESP32 microcontroller.
@@ -77,7 +82,7 @@ weather application,show data obtained from the sensors.
 
 ⛷ Real-Time Clock (RTC) Module: Keeps track of time, allowing the irrigation system to operate on a schedule, even if the main power source is interrupted.
 
-⛷ Capacitive Soil Moisture Sensors: Measure soil moisture levels to determine when to trigger the irrigation system.
+⛷ Capacitive Soil Moisture Sensors: Measure soil moisture levels to determine when to trigger the irrigation system./FDR to be used.
 
 ⛷ LCD I2C Display Module: Displays information such as system status, soil moisture levels, and time, using I2C communication for easy connection to the ESP32.
 
@@ -101,3 +106,7 @@ weather application,show data obtained from the sensors.
 
 >Expectations on friday
 - languages  and justifications.
+
+
+# how power is transmitted
+- the system has a total voltage of 10,000mAH
