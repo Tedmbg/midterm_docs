@@ -64,31 +64,36 @@ weather application,show data obtained from the sensors.
 - Capacitive soil moisture sensors5.0V
 - LCD I2C display module5.0V
 - Relay module5.0V
-- DC solenoid valve12.0V
+- DC solenoid valve 12.0V
+- 4x4 membrane keypad
 - Temprature sensors & humidity DHT22 : DHT11 to measurre air temprature.
 - sunlight intensity  pyranometer
+- jumper wires male to females.
+- SIM800 L GSM module
 
 
 
-⛷ LM7805 Voltage Regulator: Converts higher voltage (like 7.4V from batteries) down to a stable 5V to power components like the ESP32 microcontroller.
+⛷ 
+Component	Purpose	Power
+ESP32 Microcontroller	Main controller, handles logic and sensors	5V
+18650 Batteries (3.7V)	Power supply	7.4V (in series)
+LM7805 Voltage Regulator	Regulates 7.4V to 5V for ESP32 and sensors	7.4V in, 5V out
+MT3608 Buck-Boost Converter	Boosts 7.4V to 12V for solenoid valve	7.4V in, 12V out
+CR2032 Battery	Power for the RTC module	3V
+Relay Module (5V)	Controls the solenoid valve (12V)	5V signal
+Capacitive Soil Moisture Sensor	Measures soil moisture	5V
+DHT22/DHT11	Measures temperature and humidity	3.3V/5V
+Ultrasonic Sensor (HC-SR04)	Measures water level in the tank	5V
+Water Flow Sensor (YF-S201)	Measures water usage	5V
+pH Sensor (Gravity Analog)	Measures soil pH	5V
+NPK Soil Sensor	Measures soil nutrient levels	5V
+Pyranometer	Measures sunlight intensity	5V
+LCD I2C Display	Displays system info	5V
+Real-Time Clock (RTC)	Keeps track of time for scheduling	3.3V
+4x4 Membrane Keypad	User input for settings	5V
+DC Solenoid Valve (12V)	Controls water flow	12V
+- SIM800 L GSM module
 
-⛷ MT3608 Buck-Boost Converter: Boosts the 7.4V from your batteries to 12V to power the DC solenoid valve, ensuring it gets the voltage it needs to operate.
-
-⛷ 18650 Batteries (3.7V): Rechargeable lithium-ion batteries used as the main power source for your system, providing 3.7V per battery.
-
-⛷ CR2032 Battery (3.0V): A small button-cell battery used to power devices with very low power consumption, like the Real-Time Clock (RTC) module.
-
-⛷ ESP32 Microcontroller: The brain of the system, responsible for controlling the various components (sensors, valves, etc.) and managing the logic for the irrigation system. It operates on 5V but outputs 3.3V on its GPIO pins.
-
-⛷ Real-Time Clock (RTC) Module: Keeps track of time, allowing the irrigation system to operate on a schedule, even if the main power source is interrupted.
-
-⛷ Capacitive Soil Moisture Sensors: Measure soil moisture levels to determine when to trigger the irrigation system./FDR to be used.
-
-⛷ LCD I2C Display Module: Displays information such as system status, soil moisture levels, and time, using I2C communication for easy connection to the ESP32.
-
-⛷ Relay Module: Acts as a switch to control high-power devices like the solenoid valve, allowing the ESP32 to turn them on and off safely.
-
-⛷ DC Solenoid Valve: Controls the flow of water in the irrigation system. It requires 12V to operate, and is opened or closed based on the signals from the ESP32 via the relay.
 
 💬💬💬 look at small irrigation schemes in Asia small irrigation
 
@@ -109,4 +114,27 @@ weather application,show data obtained from the sensors.
 
 
 # how power is transmitted
-- the system has a total voltage of 10,000mAH
+- the system has a total voltage of 10,000mAH. total voltage is 7.4 the 3.7 batteries are connected in series.
+- formula for the relay module power(W) = Voltage(V) x Current(A)
+
+
+---------- stucture of the DB ---------
+- should have type of crops
+- shuld have growth stages
+- should have growth stages for diffrenc t crops
+- amount water required for the plant
+- evaporation rate at the farm.
+- weather conditions at the farm
+- amount of water in the tank  and the amount of water used  .
+- time intervals in which the farm was irrigated. 
+- data from the sensors.
+- crop water requirement for each crop .
+- cloud cover Relative humidity windspeed 
+
+#### pins in the esp32
+- VIN for voltage
+- GND completing the circuit
+- GPIO input output  pins  digital 
+-ADC analog to digital 
+- DAC digital to analog pins
+- 
