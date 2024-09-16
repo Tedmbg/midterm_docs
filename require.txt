@@ -138,3 +138,17 @@ DC Solenoid Valve (12V)	Controls water flow	12V
 -ADC analog to digital 
 - DAC digital to analog pins
 - 
+
+>>>>>>Essential nutrients for coffee
+- Nitrogen (N):
+    >Function: Nitrogen is essential for leaf and vegetative growth. 
+     It supports the development of the plant's green parts, which are crucial for photosynthesis.
+    > defeciency symptoms stunted growth,yellow leaves reduced yeild
+-Phosphorus (p):
+    >Function: Phosphorus is vital for root development and energy transfer in the plant,
+     supporting strong root systems and enhancing flowering and fruit development.
+    > Deficiency Symptoms: Poor root growth, delayed flowering, and reduced fruit size.
+- K :
+    > Function: Potassium is critical for regulating water uptake, 
+     improving disease resistance, and enhancing fruit quality, including bean size and flavor.
+    > Deficiency Symptoms: Marginal leaf burn, weak plants, poor fruit set, and uneven bean size.
