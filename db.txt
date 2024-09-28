@@ -14,10 +14,8 @@ SensorData
 - DataID (string, pk)              // Unique ID for each sensor data point
 - Timestamp (timestamp)            // Time of data capture
 - SoilMoisture (float)             // Soil moisture level in %
-- Temperature (float)              // Soil or air temperature in °C
+- AirTemperature (float)           // air temperature in °C
 - Humidity (float)                 // Air humidity in %
-- SunlightIntensity (float)        // Light intensity in lux
-- NutrientLevels (float)           // Soil nutrient levels
 - Rainfall (float)                 // Rainfall captured by sensor in mm
 - SoilType (string)                // Predefined based on user input, e.g., Loamy, Sandy
 - ValveStatus (string)             // Open/Closed for irrigation valves like solenoid
@@ -29,6 +27,7 @@ IrrigationSchedule
 - UserID (string, fk)              // Foreign key linking to the User table
 - CropID (string, fk)              // Foreign key linking to the Crop table
 - StartTime (timestamp)            // When the irrigation is scheduled to start
+- EndTime (timestamp). 		   // this will tell us when the irrigation has stopped.
 - Duration (int)                   // Duration of irrigation in minutes or hours
 - WaterVolume (float)              // Total volume of water used for irrigation
 - Status (string)                  // Current state: Pending, Active, Completed, Skipped
