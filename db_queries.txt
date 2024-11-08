@@ -1,0 +1,70 @@
+-- WeatherData Table
+CREATE TABLE WeatherData (
+  WeatherID VARCHAR PRIMARY KEY,
+  Timestamp TIMESTAMP,
+  Temperature FLOAT,
+  Humidity FLOAT,
+  Rainfall FLOAT,
+  WindSpeed FLOAT,
+  CloudCover FLOAT,
+  SunshineDuration FLOAT,
+  Forecast VARCHAR
+);
+
+-- SensorData Table
+CREATE TABLE SensorData (
+  DataID VARCHAR PRIMARY KEY,
+  Timestamp TIMESTAMP,
+  SoilMoisture FLOAT,
+  AirTemperature FLOAT,
+  Humidity FLOAT,
+  Rainfall FLOAT,
+  SoilType VARCHAR,
+  ValveStatus VARCHAR,
+  WaterFlow FLOAT
+);
+
+-- IrrigationSchedule Table
+CREATE TABLE IrrigationSchedule (
+  ScheduleID VARCHAR PRIMARY KEY,
+  UserID VARCHAR,
+  CropID VARCHAR,
+  StartTime TIMESTAMP,
+  EndTime TIMESTAMP,
+  Duration INT,
+  WaterVolume FLOAT,
+  Status VARCHAR,
+  FOREIGN KEY (UserID) REFERENCES User(UserID),
+  FOREIGN KEY (CropID) REFERENCES Crop(CropID)
+);
+
+-- CropWaterRequirement Table
+CREATE TABLE CropWaterRequirement (
+  RequirementID VARCHAR PRIMARY KEY,
+  CropID VARCHAR,
+  GrowthStage VARCHAR,
+  StartWeek INT,
+  EndWeek INT,
+  Kc FLOAT,
+  WaterRequirement FLOAT,
+  FOREIGN KEY (CropID) REFERENCES Crop(CropID)
+);
+
+-- User Table
+CREATE TABLE User (
+  UserID VARCHAR PRIMARY KEY,
+  Name VARCHAR,
+  ContactInfo VARCHAR,
+  LoginCredentials VARCHAR,
+  FarmLocation VARCHAR,
+  SoilType VARCHAR,
+  CropsPlanted VARCHAR,
+  NationalID VARCHAR
+);
+
+-- Crop Table (Assumed)
+CREATE TABLE Crop (
+  CropID VARCHAR PRIMARY KEY,
+  CropName VARCHAR,
+  -- Additional fields as necessary
+);

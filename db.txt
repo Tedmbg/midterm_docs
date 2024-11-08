@@ -32,13 +32,7 @@ IrrigationSchedule
 - WaterVolume (float)              // Total volume of water used for irrigation
 - Status (string)                  // Current state: Pending, Active, Completed, Skipped
 
-Field
-- FieldID (string, pk)             // Unique identifier for the field
-- UserID (string, fk)              // Foreign key linking to the User (farmer)
-- CropID (string, fk)              // Foreign key linking to the Crop table
-- Location (string)                // Description or geographical coordinates of the field
-- Area (float)                     // Size of the field in acres/hectares
-- SoilType (string)                // Soil type for this field (e.g., Loamy, Clayey)
+
 
 CropWaterRequirement
 - RequirementID (string, pk)       // Unique ID for each water requirement record

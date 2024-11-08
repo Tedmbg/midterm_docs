@@ -1,0 +1,16 @@
+{
+  "folders": [
+	{
+		"path": "../esp32_test"
+	},
+	{
+		"name": "test",
+		"path": "../../PlatformIO/Projects/test"
+	},
+	{
+		"name": "farm_yangu",
+		"path": "."
+	}
+],
+  "settings": {}
+}

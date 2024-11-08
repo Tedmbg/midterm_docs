@@ -1,0 +1,32 @@
+>>>>>>>>>>>>Hello Ted.
+- the void setup is executed when the board loads up once and the loop will execute continuously as fast as possible
+- 💊 we should use baud rate to increase and decrease the rate at which info is sent to board.
+-In C++ we use the "" to display the string in print ln
+When to Use Higher Baud Rates? 🚀
+- Use higher baud rates like 921600 or 1152000 when you need to send a lot of data quickly (e.g., image or video data).
+- For simple sensor data and debugging, 115200 is a good default.
+
+ --- the Buttons on the board🏆🏆🏆🏆🏆🏆
+ - the EN button is the reset butn/enable this is for reseting the board. or starting the code again.
+ - 100/boot  this shuold be presed if connecting has been their for to long.
+
+THE ULTRASONIC SENSOR
+- in the sensor we have vcc(Voltage common Collector) - this pin needs to be connected to stable power.
+- Whenc onnecting the VCC from senor to VIN we are giving the sensor power. VIN provides 5V.
+- By connecting GND of the sensor to GND of the ESP32, you are establishing a common ground, which allows both devices to “speak the same language” electrically.
+
+- const byte ROWS = 4; // has 4 rows -- here we use byte instead of int beacuse byte uses less memory.
+
+💯💯 the LCD is 16,2 
+  lcd.setCursor(0,0); the first 0 is the column the other is the row.
+  lcd.setCursor(8,0) ; this wil print from the center.
+
+😱😱incase a depenency breaks here how we can fix it’s
+>>>Add the below code in the terminal in the exact dir 
+rm -rf .pio
+rm -rf libdeps
+platformio run --target clean
+platformio run
+
+
+###🐼🐼🐼🐼🐼🐼 When using delay  the code stops  but when using millis() the code can be skipped

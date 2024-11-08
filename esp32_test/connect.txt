@@ -1,0 +1,59 @@
+>>>>>>>>> the HC-SR04 to the ESP32S Based on the Pinout Diagram
+Let’s ensure you’re connecting the HC-SR04 sensor to the correct pins:
+
+VCC (HC-SR04) → VIN (Pin 2) or 5V (Pin 38) on ESP32
+
+This will power your sensor with a stable 5V supply.
+GND (HC-SR04) → GND (Pin 1) on ESP32
+
+Use any of the GND pins on the ESP32.
+TRIG (HC-SR04) → GPIO13 (Pin 12) on ESP32
+
+Ensure this is connected to the correct pin (based on the diagram, it’s Pin 12).
+ECHO (HC-SR04) → GPIO12 (Pin 14) on ESP32
+
+This should go to Pin 14 according to your diagram.
+
+>>>>>>>>>>>>>>>LCD SCREEn
+-GND
+- VCC - 5V
+- SDA GPIO21 
+- SCL GPIO22
+
+
+>>>>>>>> buzzer
+- + with GPIO25. 
+- Other wire ground.
+
+🌡️🌡️🌡️🌡️🌡️🌡️ Temprature sensor 
+- vcc
+- GND
+- Data ---->>> GPIO 14pen
+
+🚡🚡Red cable is +ve black cables are -ve
+
+🍦🍦 the LM7805 connector
+- the first pin is the +ve
+- Second is the -Ve 
+- third is the stepped down current.
+
+💪💪💪💪💪💪💪 the relay module
+- i have connected the signal to come from pin 26.
+- I have connected to the vcc to 5V and the ground to the GND
+
+-The other side has NO(Normal open),COM(common) and NC(normal close).
+
+😤😤😤😤😤😤 the MT3608
+- i ma geting 10.89v in and steping out to 12.30v
+
+
+🥕🥕🥕🥕 connection of the RTC module
+vcc -- 3.3v
+GND -- GND
+SDA -- GPIO21
+SCL -- GPIO22
+
+🌾🌾🌾🌾🌾🌾🌾🌾soil moisture sensor
+VCC -- 3.3v
+GND -- GND
+AO(Analog output) -- GPIO 34
