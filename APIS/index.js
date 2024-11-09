@@ -5,6 +5,8 @@ const { Pool } = require('pg');
 const app = express();
 const port = 3000; // Change as needed
 
+// https://farmyangu-p10j3qq6w-navismarts-projects.vercel.app
+
 // Middleware to parse JSON requests
 app.use(bodyParser.json());
 
