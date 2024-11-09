@@ -3,7 +3,6 @@ const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 
 const app = express();
-const port = 3000; // Change as needed
 
 // https://farmyangu-p10j3qq6w-navismarts-projects.vercel.app
 
@@ -20,7 +19,7 @@ const pool = new Pool({
 });
 
 // Test GET endpoint
-app.get('/api/test', (req, res) => {
+app.get('/test', (req, res) => {
     res.json({ message: 'API is working!', status: 'success' });
 });
 
@@ -61,7 +60,11 @@ app.post('/add/sensor_data', async (req, res) => {
     }
 });
 
+// Export the app
+module.exports = app;
+
+
 // Start the server
-app.listen(port, () => {
-    console.log(`Serveris up and running :)`);
-});
+// app.listen(port, () => {
+//     console.log(`Serveris up and running :)`);
+// });
