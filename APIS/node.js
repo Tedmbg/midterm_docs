@@ -17,6 +17,11 @@ const pool = new Pool({
     port: 22282, // Default for PostgreSQL is 5432
 });
 
+// Test GET endpoint
+app.get('/api/test', (req, res) => {
+    res.json({ message: 'API is working!', status: 'success' });
+});
+
 // Route to insert sensor data
 app.post('/add/sensor_data', async (req, res) => {
     const {
