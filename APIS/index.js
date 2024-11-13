@@ -11,6 +11,7 @@ const app = express();
 app.use(bodyParser.json());
 
 // PostgreSQL connection pool
+//here is the db
 const pool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
