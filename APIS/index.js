@@ -4,7 +4,7 @@ const { Pool } = require('pg');
 
 const app = express();
 
-// https://farmyangu-p10j3qq6w-navismarts-projects.vercel.app
+
 
 // Middleware to parse JSON requests
 app.use(bodyParser.json());
@@ -60,11 +60,9 @@ app.post('/add/sensor_data', async (req, res) => {
     }
 });
 
-// Export the app
-module.exports = app;
 
 
-// Start the server
-// app.listen(port, () => {
-//     console.log(`Serveris up and running :)`);
-// });
+//Start the server
+app.listen(port, () => {
+    console.log(`Serveris up and running :)`);
+});
