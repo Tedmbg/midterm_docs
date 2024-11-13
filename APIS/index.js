@@ -2,20 +2,24 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const app = express();
-
-
 
 // Middleware to parse JSON requests
 app.use(bodyParser.json());
 
 // PostgreSQL connection pool
 const pool = new Pool({
-    user: 'avnadmin',
-    host: 'pg-3467ff9e-tedmbg9-558f.k.aivencloud.com',
-    database: 'defaultdb',
-    password: 'AVNS_q7FCjCAaRJSwoGS9vqh',
-    port: 22282, // Default for PostgreSQL is 5432
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT || 5432, // Default for PostgreSQL is 5432
+    ssl: {
+        rejectUnauthorized: false, // Adjust this based on your database SSL settings
+    },
 });
 
 // Test GET endpoint
@@ -35,7 +39,15 @@ app.post('/add/sensor_data', async (req, res) => {
         waterflow,
     } = req.body;
 
-    if (!dataid || !timestamp || !soilmoisture || !temperature || !humidity || !valvestatus || !waterflow) {
+    if (
+        !dataid ||
+        !timestamp ||
+        !soilmoisture ||
+        !temperature ||
+        !humidity ||
+        !valvestatus ||
+        !waterflow
+    ) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -60,9 +72,11 @@ app.post('/add/sensor_data', async (req, res) => {
     }
 });
 
-
-
-//Start the server
+// Start the server
+const port = process.env.PORT || 3000; // Use the PORT environment variable or default to 3000
 app.listen(port, () => {
-    console.log(`Serveris up and running :)`);
+    console.log(`Server is up and running on port ${port}`);
 });
+
+// Optional: Export the app for testing purposes
+module.exports = app;
