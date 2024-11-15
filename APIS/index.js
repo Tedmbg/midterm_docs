@@ -23,6 +23,8 @@ const pool = new Pool({
     },
 });
 
+//link to apis midtermdocs-production.up.railway.app
+
 // Test GET endpoint
 app.get('/test', (req, res) => {
     res.json({ message: 'API is working!', status: 'success' });
@@ -54,7 +56,7 @@ app.post('/add/sensor_data', async (req, res) => {
 
     try {
         const query = `
-            INSERT INTO SensorData (dataid, timestamp, soilmoisture, temperature, humidity, valvestatus, waterflow)
+            INSERT INTO sensordata (dataid, timestamp, soilmoisture, temperature, humidity, valvestatus, waterflow)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
         `;
         await pool.query(query, [
