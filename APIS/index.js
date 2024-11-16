@@ -40,6 +40,7 @@ app.post('/add/sensor_data', async (req, res) => {
         humidity,
         valvestatus,
         waterflow,
+        sonarsensor,
     } = req.body;
 
     if (
@@ -49,14 +50,15 @@ app.post('/add/sensor_data', async (req, res) => {
         !temperature ||
         !humidity ||
         !valvestatus ||
-        !waterflow
+        !waterflow ||
+        !sonarsensor
     ) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
     try {
         const query = `
-            INSERT INTO sensordata (dataid, timestamp, soilmoisture, temperature, humidity, valvestatus, waterflow)
+            INSERT INTO sensordata (dataid, timestamp, soilmoisture, temperature, humidity, valvestatus, waterflow,sonarsensor)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
         `;
         await pool.query(query, [
