@@ -78,6 +78,59 @@ app.post('/add/sensor_data', async (req, res) => {
     }
 });
 
+// Route to insert weather data
+app.post('/add/weather_data', async (req, res) => {
+    const {
+        sunshineduration,
+        timestamp,
+        temperature,
+        humidity,
+        rainfall,
+        windspeed,
+        cloudcover,
+        forecast,
+        weatherid
+    } = req.body;
+
+    // Validate required fields
+    if (
+        sunshineduration === undefined ||
+        timestamp === undefined ||
+        temperature === undefined ||
+        humidity === undefined ||
+        rainfall === undefined ||
+        windspeed === undefined ||
+        cloudcover === undefined ||
+        forecast === undefined ||
+        weatherid === undefined
+    ) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        const query = `
+            INSERT INTO weatherdata (sunshineduration, timestamp, temperature, humidity, rainfall, windspeed, cloudcover, forecast, weatherid)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `;
+        await pool.query(query, [
+            sunshineduration,
+            timestamp,
+            temperature,
+            humidity,
+            rainfall,
+            windspeed,
+            cloudcover,
+            forecast,
+            weatherid
+        ]);
+        res.status(200).json({ status: 'success' });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: 'Database insertion failed' });
+    }
+});
+
+
 // Start the server
 const port = process.env.PORT || 3000; // Use the PORT environment variable or default to 3000
 app.listen(port, () => {
