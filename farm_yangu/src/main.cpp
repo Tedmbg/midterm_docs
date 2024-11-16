@@ -6,6 +6,7 @@
 #include <Wire.h> // thsi is for I2C communication pins
 #include <WiFi.h> // this is the wifi module
 #include <HTTPClient.h> // for api's
+#include <ArduinoJson.h> // for JSON parsing
 
 // wifi connection details
 const char* ssid = "Nexacore";
@@ -44,15 +45,13 @@ Keypad keypad = Keypad(makeKeymap(keys),rowPins,colPins,ROWS,COLS);
 #define FLOW_SENSOR_PIN 23 // this is the pins for the waterflow signal
 #define RELAY_PIN 26 // this is for the 5v relay pin.
 
+
+
 const int soilMoisturePin = 34;  // Define the analog pin
 
-// timing of the DHT
-const unsigned long DHTInterval = 6000;  // Read DHT every 2 seconds
-unsigned long lastDHTReadTime = 0;
-
-// timing for the screen time out
+// Timing for the screen timeout
 unsigned long lastKeyPressTime = 0;  // Stores the time of the last key press
-const unsigned long backlightTimeout = 7000;  // 4 seconds timeout
+const unsigned long backlightTimeout = 7000;  // 7 seconds timeout
 
 // timing of the sonic sensor
 unsigned long lastDistanceTime = 0; // last time distance was measured
@@ -66,9 +65,14 @@ float calibrationFactor = 450.0;  // Pulses per liter for the flow sensor
 
 //time for sending data
 unsigned long lastSendTime = 0;  // Tracks the last time data was sent
-const unsigned long sendInterval = 60000;  // 60 seconds interval
+const unsigned long sendInterval = 600000;  // 10 min interval
 
+//time for weather
+unsigned long lastpullTime = 0;  // Tracks the last time data was pulled and sent
+const unsigned long sendWeatherInterval = 300000;  // 5min interval
 
+float temperature = 0.0; // Global variable for temperature
+float humidity = 0.0;    // Global variable for humidity
 
 void IRAM_ATTR countPulse(){
   pulseCount ++;
@@ -87,6 +91,18 @@ long readings[numReadings];  // Array to hold distance readings
 int readIndex = 0;           // Current index in the array
 long total = 0;              // Sum of all readings
 long averageDistance = 0;    // Calculated moving average
+
+
+// Variables for weather data
+String sunshineDuration = "";
+String weatherTimestamp = "";
+float weatherTemperature = 0.0;
+float weatherHumidity = 0.0;
+float rainfall = 0.0;
+float windSpeed = 0.0;
+int cloudCover = 0;
+String forecast = "";
+String weatherId = "";
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>fuctions
@@ -144,7 +160,6 @@ int getDistance(){
     Serial.print(averageDistance);
     Serial.println(" cm");
 
-    return averageDistance;
   }  
 
     // LED Control based on the average distance
@@ -163,6 +178,8 @@ int getDistance(){
     // lcd.print("                ");  // Overwrite the previous message with spaces
     // lcd.noBacklight();  // Turn off LCD backlight
   }
+
+return averageDistance;
 }
 
 //check dht
@@ -217,6 +234,7 @@ void humidityTemp(float &temperature, float &humidity){
     lcd.print(humidity);
     lcd.print("%");
   }
+  delay(5000);
 }
 
 // ⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️⏱️ check RTC module
@@ -285,9 +303,21 @@ String displayTime() {
     sprintf(buffer, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
     return String(buffer);
 
-    delay(1000);  // Refresh every second
+    delay(3000);  // Refresh every second
 }
 
+
+//waterFlow sensor
+float waterFlowSensor(){
+    noInterrupts();
+        int pulses = pulseCount;
+        pulseCount = 0;
+        interrupts();
+
+        float waterFlow = (pulses / calibrationFactor);
+
+        return waterFlow;
+}
 
 // soil moisture sensor
 void soilMoisture(){
@@ -415,6 +445,7 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
             lcd.setCursor(0, 1);
             lcd.print(response);
             delay(4000);
+            lcd.clear();
 
             // Print on Serial Monitor
             Serial.println("Server Response:");
@@ -458,6 +489,8 @@ void readSensorData(float temperature, float humidity, int soilMoistureValue, St
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("Reading Data...");
+
+      delay(1500);
 
       Serial.print("Temperature: ");
       Serial.println(temperature);
@@ -519,6 +552,112 @@ void readSensorData(float temperature, float humidity, int soilMoistureValue, St
 
     delay(5000); // Wait before the next iteration
 }
+
+
+// Function to fetch weather data from API
+void fetchWeatherData() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    // Replace with your API key and desired location
+    String apiKey = "81f360187f497f7d31d712d1c08bd0e1"; // OpenWeatherMap API key
+    String city = "Nairobi";         // Replace with your city
+    String units = "metric";        // Use "imperial" for Fahrenheit
+    String apiUrl = "http://api.openweathermap.org/data/2.5/weather?q=" + city + "&units=" + units + "&appid=" + apiKey;
+
+    http.begin(apiUrl);
+    int httpResponseCode = http.GET();
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("Weather API Response:");
+      Serial.println(response);
+
+      // Parse JSON response
+      const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(4) + 350;
+      DynamicJsonDocument doc(capacity);
+
+      DeserializationError error = deserializeJson(doc, response);
+      if (error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.f_str());
+        return;
+      }
+
+      // Extract data
+      weatherTimestamp = String(doc["dt"].as<long>()); // Unix timestamp
+      weatherTemperature = doc["main"]["temp"].as<float>();
+      weatherHumidity = doc["main"]["humidity"].as<float>();
+      windSpeed = doc["wind"]["speed"].as<float>();
+      cloudCover = doc["clouds"]["all"].as<int>();
+      forecast = doc["weather"][0]["description"].as<String>();
+      weatherId = String(doc["weather"][0]["id"].as<int>());
+      rainfall = doc["rain"]["1h"] | 0.0; // Get rainfall in the last 1 hour, if available
+      sunshineDuration = "N/A"; // OpenWeatherMap API may not provide sunshine duration directly
+
+      // Print extracted data
+      Serial.println("Extracted Weather Data:");
+      Serial.println("Timestamp: " + weatherTimestamp);
+      Serial.println("Temperature: " + String(weatherTemperature));
+      Serial.println("Humidity: " + String(weatherHumidity));
+      Serial.println("Rainfall: " + String(rainfall));
+      Serial.println("Wind Speed: " + String(windSpeed));
+      Serial.println("Cloud Cover: " + String(cloudCover));
+      Serial.println("Forecast: " + forecast);
+      Serial.println("Weather ID: " + weatherId);
+
+    } else {
+      Serial.print("Error on HTTP request: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("Wi-Fi Disconnected");
+  }
+}
+
+// Function to send weather data to your server
+void sendWeatherDataToServer() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin("https://midtermdocs-production.up.railway.app/add/weather_data"); // Replace with your server URL
+    http.addHeader("Content-Type", "application/json");
+
+    // Prepare JSON payload
+    String jsonPayload = "{";
+    jsonPayload += "\"sunshineduration\":\"" + sunshineDuration + "\",";
+    jsonPayload += "\"timestamp\":\"" + weatherTimestamp + "\",";
+    jsonPayload += "\"temperature\":" + String(weatherTemperature) + ",";
+    jsonPayload += "\"humidity\":" + String(weatherHumidity) + ",";
+    jsonPayload += "\"rainfall\":" + String(rainfall) + ",";
+    jsonPayload += "\"windspeed\":" + String(windSpeed) + ",";
+    jsonPayload += "\"cloudcover\":" + String(cloudCover) + ",";
+    jsonPayload += "\"forecast\":\"" + forecast + "\",";
+    jsonPayload += "\"weatherid\":\"" + weatherId + "\"";
+    jsonPayload += "}";
+
+    Serial.print("Sending JSON Payload: ");
+    Serial.println(jsonPayload);
+
+    // Send the POST request
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("Server Response:");
+      Serial.println(response);
+    } else {
+      Serial.print("Error on sending POST: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("Wi-Fi Disconnected!");
+  }
+}
+
+
 
 // 🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁
 void setup() {
@@ -588,27 +727,12 @@ void loop() {
 
   Serial.println("<<<<<>>>>>>>>>>"+key);
 
-// if key press it is displayed
-// if(key){
-//   lcd.backlight();
-//   lastKeyPressTime = millis();  // Reset the timer
-//   lcd.clear();
-//   lcd.setCursor(0,0); // set the column and the row
-//   lcd.print("Key Pressed: ");
-//   lcd.print(key); // the key which has been pressed
-//   lcd.clear();
-// }
+
 // turn of the screen
  if (millis() - lastKeyPressTime > backlightTimeout) {
     lcd.noBacklight();  // Turn off the backlight to save power
   }
 
-// // Only read DHT every 4 seconds
-//   if (millis() - lastDHTReadTime >= DHTInterval) {
-//     float temperature, humidity;
-//     humidityTemp(temperature,humidity);  // Read DHT sensor
-//     lastDHTReadTime = millis();  // Update last read time
-//   }
 
 // measure distance after every 3 seconds
   if(millis() - lastDistanceTime >= SonarInterval){
@@ -617,7 +741,7 @@ void loop() {
   }
  
   // test Solenoid valve
-  if (key == '5'){
+  if (key == '6'){
     lcd.backlight();
     lcd.clear();
     lcd.print("Key pressed: ");
@@ -629,67 +753,102 @@ void loop() {
     Serial.println("Solenoid deactivated");
   }
 
-  if (key == '2'){
+ // display the time
+  if (key == '1'){
     displayTime();
     delay(3500);
+    lcd.clear();
   }
 
-  //soilMoisture
-  //soil moisture sensor
-  int soilMoistureValue = analogRead(soilMoisturePin);
-  Serial.print("Soil Moisture: ");
-  Serial.println(soilMoistureValue);
+//display temp and humidity
+  if(key == '2'){
+    lcd.backlight();
+    humidityTemp(temperature,humidity);
+    lcd.noBacklight();
+    lcd.clear();
+  }
 
-  delay(1000);
+// display the valve status
+  if(key == '3'){
+     String valveStatus = digitalRead(RELAY_PIN) ? "Open" : "Closed";
+     lcd.clear();
+     lcd.backlight();
+     lcd.setCursor(0,0);
+     lcd.print("Valve:");
+     lcd.setCursor(0,1);
+     lcd.print(valveStatus);
+     delay(5000);
+     lcd.noBacklight();
+     lcd.clear();
+  }
 
-  //valve status
-  String valveStatus = digitalRead(RELAY_PIN) ? "Open" : "Closed";
+  // display tank distance
+  if(key == '4'){
+    int distance = getDistance();
+     lcd.clear();
+     lcd.backlight();
+     lcd.setCursor(0,0);
+     lcd.print("Water Distance :");
+     lcd.setCursor(0,1);
+     lcd.print(distance);
+     lcd.print("cm");
+     delay(3500);
+     lcd.noBacklight();
+     lcd.clear();
+  }
+
+  // display the flow rate
+
+  if(key == '5'){
+     float waterFlow = waterFlowSensor();
+     lcd.clear();
+     lcd.backlight();
+     lcd.setCursor(0,0);
+     lcd.print("Water Flow  :");
+     lcd.setCursor(0,1);
+     lcd.print(waterFlow);
+     lcd.print("L/min");
+     delay(3500);
+     lcd.noBacklight();
+     lcd.clear();
+
+  }
+  //send weather data
+  if(millis() - lastpullTime >= sendWeatherInterval){
+
+     fetchWeatherData();           // Fetch data from the weather API
+     sendWeatherDataToServer();    // Send the fetched data to your server
+
+    lastpullTime = millis();
+
+  }
 
 
-  // test the flow sensor
-  // Check if 1 second has passed since the last flow rate calculation
-  // if (millis() - lastFlowReadTime >= flowInterval) {
-  //   // Disable interrupts to avoid conflict while reading the pulse count
-  //   noInterrupts();  
-  //   int pulses = pulseCount;  // Make a local copy of the pulse count
-  //   pulseCount = 0;  // Reset the pulse count after reading
-  //   interrupts();  // Re-enable interrupts
-
-  //   // Calculate flow rate in liters per second
-  //   float waterFlow = (pulses / calibrationFactor);  // Pulses counted in 1 second
-
-  //   // Print the flow rate to the Serial Monitor
-  //   Serial.print("Flow Rate: ");
-  //   Serial.print(waterFlow);
-  //   Serial.println(" L/sec");
-
-  //   // Update the last read time
-  //   lastFlowReadTime = millis();
-  // }
-
- // Get current time
-  String currentTime = displayTime();
-
-  // return tank distance
-  int distance = getDistance();
-
-  // get water flow value
-   noInterrupts();  
-    int pulses = pulseCount;  // Make a local copy of the pulse count
-    pulseCount = 0;  // Reset the pulse count after reading
-    interrupts();  // Re-enable interrupts
-
-    // Calculate flow rate in liters per second
-    float waterFlow = (pulses / calibrationFactor);  // Pulses counted in 1 second
-
-  // get temp and humidity
-  float temperature,humidity;
-  humidityTemp(temperature,humidity);  // Read DHT sensor
-
-    // Send data every 10 seconds
+    // Update sensor data every `sendInterval`
     if (millis() - lastSendTime >= sendInterval) {
+
+       // get the humidity and temperature
+        float temperature, humidity;
+        humidityTemp(temperature, humidity);
+      
+      // get current time. 
+        String currentTime = displayTime(); 
+
+       // get the soil moisture value 
+        int soilMoistureValue = analogRead(soilMoisturePin);
+
+        // get the valve status
+        String valveStatus = digitalRead(RELAY_PIN) ? "Open" : "Closed";
+
+        // get distance of the tank
+        int distance = getDistance();
+
+      // get the flow rate
+        float waterFlow = waterFlowSensor();
+
+        // send data to readSensor to be displayed on the lcd before sending.
         readSensorData(temperature, humidity, soilMoistureValue, valveStatus, waterFlow, currentTime, distance);
-        lastSendTime = millis();  // Reset the timer
+        lastSendTime = millis();
     }
 
   delay(50);  // Delay for stability between readings
