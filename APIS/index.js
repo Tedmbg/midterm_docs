@@ -59,7 +59,7 @@ app.post('/add/sensor_data', async (req, res) => {
     try {
         const query = `
             INSERT INTO sensordata (dataid, timestamp, soilmoisture, temperature, humidity, valvestatus, waterflow,sonarsensor)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `;
         await pool.query(query, [
             dataid,
