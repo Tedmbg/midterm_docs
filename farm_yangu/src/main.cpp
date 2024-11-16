@@ -370,11 +370,14 @@ void startSensors(){
 }
 
 // send sensor data
-void sendDataToServer(float temperature, float humidity, int soilMoisture, String valveStatus, float waterFlow,String currentTime,int distance) {
+void sendDataToServer(float temperature, float humidity, int soilMoisture, String valveStatus, float waterFlow, String currentTime, int distance) {
     if (WiFi.status() == WL_CONNECTED) {
-        HTTPClient http;
-        http.begin("midtermdocs-production.up.railway.app/add/sensor_data"); // Replace with your Node.js server IP or domain
-        http.addHeader("Content-Type", "application/json");
+        WiFiClientSecure client;
+        client.setInsecure(); // Accept all certificates (for testing purposes). For production, you should verify the certificate.
+       
+        HTTPClient https;
+        https.begin("https://midtermdocs-production.up.railway.app/add/sensor_data"); // Replace with your Node.js server IP or domain
+        https.addHeader("Content-Type", "application/json");
 
         // Prepare JSON payload
         DateTime now = rtc.now();  // Get the current time from the RTC
@@ -383,6 +386,7 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
 
         String dataID = "D-" + String(now.unixtime()); // Generate unique data ID based on timestamp
 
+        // Construct JSON payload
         String jsonPayload = "{";
         jsonPayload += "\"dataid\":\"" + dataID + "\",";
         jsonPayload += "\"timestamp\":\"" + timestamp + "\",";
@@ -390,37 +394,38 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
         jsonPayload += "\"temperature\":" + String(temperature) + ",";
         jsonPayload += "\"humidity\":" + String(humidity) + ",";
         jsonPayload += "\"valvestatus\":\"" + valveStatus + "\",";
-        jsonPayload += "\"waterflow\":" + String(waterFlow);
+        jsonPayload += "\"waterflow\":" + String(waterFlow) + ",";
+        jsonPayload += "\"currentTime\":\"" + currentTime + "\",";
+        jsonPayload += "\"distance\":" + String(distance);
         jsonPayload += "}";
 
         Serial.print("Sending JSON Payload: ");
         Serial.println(jsonPayload);
 
         // Send the POST request
-        int httpResponseCode = http.POST(jsonPayload);
+        int httpResponseCode = https.POST(jsonPayload);
 
         if (httpResponseCode > 0) {
-            String response = http.getString();
+            String response = https.getString();
 
-            //print on lcd
-             lcd.clear();
-             lcd.setCursor(0,0);
+            // Print on LCD
+            lcd.clear();
+            lcd.setCursor(0, 0);
             lcd.print("Server Response:");
-            lcd.setCursor(0,1);
+            lcd.setCursor(0, 1);
             lcd.print(response);
             delay(4000);
 
-          // print on terminal
+            // Print on Serial Monitor
             Serial.println("Server Response:");
             Serial.println(response);
         } else {
-
-          // lcd print
+            // Print error on LCD
             lcd.clear();
             lcd.print("Error on sending POST");
             delay(4000);
 
-            // print on terminal
+            // Print error on Serial Monitor
             Serial.print("Error on sending POST: ");
             Serial.println(httpResponseCode);
         }
@@ -430,6 +435,7 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
         Serial.println("Wi-Fi Disconnected!");
     }
 }
+
 
 
 // read sensor data and send
