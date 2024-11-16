@@ -64,6 +64,11 @@ unsigned long lastFlowReadTime = 0;
 const unsigned long flowInterval = 1000;  // Measure flow rate every 1 second
 float calibrationFactor = 450.0;  // Pulses per liter for the flow sensor
 
+//time for sending data
+unsigned long lastSendTime = 0;  // Tracks the last time data was sent
+const unsigned long sendInterval = 60000;  // 60 seconds interval
+
+
 
 void IRAM_ATTR countPulse(){
   pulseCount ++;
@@ -94,7 +99,7 @@ void playSiren(){
 }
 
 // ####################### get distance
-void getDistance(){
+int getDistance(){
 
   // Trigger the ultrasonic to send sound waves
   digitalWrite(TRIG_PIN, LOW);  // Set voltage to 0 to reset the sensor.
@@ -138,6 +143,8 @@ void getDistance(){
     Serial.print("Average Distance: ");
     Serial.print(averageDistance);
     Serial.println(" cm");
+
+    return averageDistance;
   }  
 
     // LED Control based on the average distance
@@ -158,32 +165,56 @@ void getDistance(){
   }
 }
 
+//check dht
+void checkDHT() {
+    float tempTest = dht.readTemperature();
+    float humTest = dht.readHumidity();
+
+    if (isnan(tempTest) || isnan(humTest)) {
+        Serial.println("DHT sensor initialization failed. Please check wiring.");
+    } else {
+        Serial.println("DHT sensor initialized successfully.");
+    }
+
+    delay(2000);
+}
+
+
 // @@@@@@@@@@@@@@@@@@@@@@@@@@ humidity temp
-void humidityTemp(){
+void humidityTemp(float &temperature, float &humidity){
   // Get DHT Sensor readings
- float h = dht.readHumidity(); // read humidity
- float t = dht.readTemperature(); // read temprature
+      for (int i = 0; i < 3; i++) { // Retry up to 3 times
+        temperature = dht.readTemperature();
+        humidity = dht.readHumidity();
+
+        if (!isnan(temperature) && !isnan(humidity)) {
+            break; // Exit loop if readings are valid
+        }
+
+        delay(500); // Short delay before retrying
+    }
+
 
 // Check if any reads failed and exit early
-  if (isnan(h) || isnan(t)) {
+  if (isnan(humidity) || isnan(temperature)) {
     Serial.println("Failed to read from DHT sensor!");
   } else {
     // Display DHT values on Serial Monitor
     Serial.print("Humidity: ");
-    Serial.print(h);
+    Serial.print(humidity);
     Serial.print("%\t");
     Serial.print("Temperature: ");
-    Serial.print(t);
+    Serial.print(temperature);
     Serial.println("*C");
 
     // Display on LCD
     lcd.setCursor(0, 0);
     lcd.print("Temp: ");
-    lcd.print(t);
+    lcd.print(temperature);
     lcd.print("C");
     lcd.setCursor(0, 1);
     lcd.print("Hum: ");
-    lcd.print(h);
+    lcd.print(humidity);
     lcd.print("%");
   }
 }
@@ -219,7 +250,7 @@ void timeModuleCheck(){
 }
 
 // ⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️ Display time on lcd
-void displayTime() {
+String displayTime() {
     // Get the current time from the RTC
     DateTime now = rtc.now();  // Get the current time
 
@@ -249,12 +280,16 @@ void displayTime() {
     Serial.print(':');
     if (now.second() < 10) Serial.print('0');
     Serial.println(now.second(), DEC);
+    
+    char buffer[20];
+    sprintf(buffer, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+    return String(buffer);
 
     delay(1000);  // Refresh every second
 }
 
 
-
+// soil moisture sensor
 void soilMoisture(){
 //soil moisture sensor
 int soilMoistureValue = analogRead(soilMoisturePin);
@@ -264,6 +299,7 @@ Serial.println(soilMoistureValue);
 delay(1000);  
 }
 
+//connect to wifi
 void connectWifi(){
    //connect to Wi=Fi
   lcd.setCursor(0,0);
@@ -301,6 +337,7 @@ void connectWifi(){
   delay(3000);
 }
 
+// initialize the sensors
 void startSensors(){
    // Welcome Message
   lcd.setCursor(4,0);
@@ -332,6 +369,151 @@ void startSensors(){
  
 }
 
+// send sensor data
+void sendDataToServer(float temperature, float humidity, int soilMoisture, String valveStatus, float waterFlow,String currentTime,int distance) {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin("midtermdocs-production.up.railway.app/add/sensor_data"); // Replace with your Node.js server IP or domain
+        http.addHeader("Content-Type", "application/json");
+
+        // Prepare JSON payload
+        DateTime now = rtc.now();  // Get the current time from the RTC
+        String timestamp = String(now.year()) + "-" + String(now.month()) + "-" + String(now.day()) + "T" +
+                           String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + "Z";
+
+        String dataID = "D-" + String(now.unixtime()); // Generate unique data ID based on timestamp
+
+        String jsonPayload = "{";
+        jsonPayload += "\"dataid\":\"" + dataID + "\",";
+        jsonPayload += "\"timestamp\":\"" + timestamp + "\",";
+        jsonPayload += "\"soilmoisture\":" + String(soilMoisture) + ",";
+        jsonPayload += "\"temperature\":" + String(temperature) + ",";
+        jsonPayload += "\"humidity\":" + String(humidity) + ",";
+        jsonPayload += "\"valvestatus\":\"" + valveStatus + "\",";
+        jsonPayload += "\"waterflow\":" + String(waterFlow);
+        jsonPayload += "}";
+
+        Serial.print("Sending JSON Payload: ");
+        Serial.println(jsonPayload);
+
+        // Send the POST request
+        int httpResponseCode = http.POST(jsonPayload);
+
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+
+            //print on lcd
+             lcd.clear();
+             lcd.setCursor(0,0);
+            lcd.print("Server Response:");
+            lcd.setCursor(0,1);
+            lcd.print(response);
+            delay(4000);
+
+          // print on terminal
+            Serial.println("Server Response:");
+            Serial.println(response);
+        } else {
+
+          // lcd print
+            lcd.clear();
+            lcd.print("Error on sending POST");
+            delay(4000);
+
+            // print on terminal
+            Serial.print("Error on sending POST: ");
+            Serial.println(httpResponseCode);
+        }
+
+        http.end();
+    } else {
+        Serial.println("Wi-Fi Disconnected!");
+    }
+}
+
+
+// read sensor data and send
+
+void readSensorData(float temperature, float humidity, int soilMoistureValue, String valveStatus, float waterFlow, String currentTime,int distance){
+   // Read sensor data
+    // float temperature = dht.readTemperature();
+    // float humidity = dht.readHumidity();
+    // int soilMoistureValue = analogRead(soilMoisturePin);
+    // String valveStatus = digitalRead(RELAY_PIN) ? "Open" : "Closed";
+
+    // // Calculate water flow
+    // noInterrupts();
+    // int pulses = pulseCount;
+    // pulseCount = 0;
+    // interrupts();
+    // float waterFlow = (pulses / calibrationFactor);
+
+   // Print data to Serial Monitor and LCD
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Reading Data...");
+
+      Serial.print("Temperature: ");
+      Serial.println(temperature);
+      lcd.setCursor(0, 0); // Adjust cursor for temperature
+      lcd.print("Temp: ");
+      lcd.print(temperature);
+      lcd.print("C");
+
+      delay(3000); // Allow time to read each value
+
+      Serial.print("Humidity: ");
+      Serial.println(humidity);
+      lcd.setCursor(0, 1); // Adjust cursor for humidity
+      lcd.print("Hum: ");
+      lcd.print(humidity);
+      lcd.print("%");
+
+      delay(3000);
+
+      Serial.print("Soil Moisture: ");
+      Serial.println(soilMoistureValue);
+      lcd.clear(); // Clear LCD for next data
+      lcd.setCursor(0, 0);
+      lcd.print("SoilMoist: ");
+      lcd.print(soilMoistureValue);
+
+      delay(3000);
+
+      Serial.print("Valve Status: ");
+      Serial.println(valveStatus);
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Valve: ");
+      lcd.print(valveStatus);
+
+      delay(3000);
+
+      Serial.print("Water Flow: ");
+      Serial.println(waterFlow);
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Flow: ");
+      lcd.print(waterFlow);
+      lcd.print("L/min");
+
+      delay(3000);
+
+      Serial.print("Tank distance: ");
+      Serial.println(distance);
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("T Distance: ");
+      lcd.print(distance);
+      lcd.print("L/min");
+
+
+    // Send data to server
+    sendDataToServer(temperature, humidity, soilMoistureValue, valveStatus, waterFlow,currentTime,distance);
+
+    delay(5000); // Wait before the next iteration
+}
+
 // 🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁
 void setup() {
 Serial.begin(115200);
@@ -350,8 +532,10 @@ Serial.begin(115200);
   lcd.init();
   lcd.backlight(); // turn on the backlight.
 
+  //connecting to wifi
   connectWifi();
 
+  // initialize the sensors
   startSensors();
 
   //initialize the RTC module
@@ -368,6 +552,8 @@ Serial.begin(115200);
 
   // Initialize DHT Sensor
   dht.begin();
+  checkDHT();
+
 
 
   //print startup message
@@ -411,11 +597,12 @@ void loop() {
     lcd.noBacklight();  // Turn off the backlight to save power
   }
 
-// Only read DHT every 4 seconds
-  if (millis() - lastDHTReadTime >= DHTInterval) {
-    humidityTemp();  // Read DHT sensor
-    lastDHTReadTime = millis();  // Update last read time
-  }
+// // Only read DHT every 4 seconds
+//   if (millis() - lastDHTReadTime >= DHTInterval) {
+//     float temperature, humidity;
+//     humidityTemp(temperature,humidity);  // Read DHT sensor
+//     lastDHTReadTime = millis();  // Update last read time
+//   }
 
 // measure distance after every 3 seconds
   if(millis() - lastDistanceTime >= SonarInterval){
@@ -449,26 +636,55 @@ void loop() {
 
   delay(1000);
 
+  //valve status
+  String valveStatus = digitalRead(RELAY_PIN) ? "Open" : "Closed";
+
+
   // test the flow sensor
-// Check if 1 second has passed since the last flow rate calculation
-  if (millis() - lastFlowReadTime >= flowInterval) {
-    // Disable interrupts to avoid conflict while reading the pulse count
-    noInterrupts();  
+  // Check if 1 second has passed since the last flow rate calculation
+  // if (millis() - lastFlowReadTime >= flowInterval) {
+  //   // Disable interrupts to avoid conflict while reading the pulse count
+  //   noInterrupts();  
+  //   int pulses = pulseCount;  // Make a local copy of the pulse count
+  //   pulseCount = 0;  // Reset the pulse count after reading
+  //   interrupts();  // Re-enable interrupts
+
+  //   // Calculate flow rate in liters per second
+  //   float waterFlow = (pulses / calibrationFactor);  // Pulses counted in 1 second
+
+  //   // Print the flow rate to the Serial Monitor
+  //   Serial.print("Flow Rate: ");
+  //   Serial.print(waterFlow);
+  //   Serial.println(" L/sec");
+
+  //   // Update the last read time
+  //   lastFlowReadTime = millis();
+  // }
+
+ // Get current time
+  String currentTime = displayTime();
+
+  // return tank distance
+  int distance = getDistance();
+
+  // get water flow value
+   noInterrupts();  
     int pulses = pulseCount;  // Make a local copy of the pulse count
     pulseCount = 0;  // Reset the pulse count after reading
     interrupts();  // Re-enable interrupts
 
     // Calculate flow rate in liters per second
-    float flowRate = (pulses / calibrationFactor);  // Pulses counted in 1 second
+    float waterFlow = (pulses / calibrationFactor);  // Pulses counted in 1 second
 
-    // Print the flow rate to the Serial Monitor
-    Serial.print("Flow Rate: ");
-    Serial.print(flowRate);
-    Serial.println(" L/sec");
+  // get temp and humidity
+  float temperature,humidity;
+  humidityTemp(temperature,humidity);  // Read DHT sensor
 
-    // Update the last read time
-    lastFlowReadTime = millis();
-  }
+    // Send data every 10 seconds
+    if (millis() - lastSendTime >= sendInterval) {
+        readSensorData(temperature, humidity, soilMoistureValue, valveStatus, waterFlow, currentTime, distance);
+        lastSendTime = millis();  // Reset the timer
+    }
 
   delay(50);  // Delay for stability between readings
 }
