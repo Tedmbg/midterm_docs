@@ -511,7 +511,7 @@ void readSensorData(float temperature, float humidity, int soilMoistureValue, St
       lcd.setCursor(0, 0);
       lcd.print("T Distance: ");
       lcd.print(distance);
-      lcd.print("L/min");
+      lcd.print("cm");
 
 
     // Send data to server
