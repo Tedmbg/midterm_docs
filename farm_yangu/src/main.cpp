@@ -430,7 +430,7 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
             Serial.println(httpResponseCode);
         }
 
-        http.end();
+        https.end();
     } else {
         Serial.println("Wi-Fi Disconnected!");
     }
