@@ -44,18 +44,18 @@ app.post('/add/sensor_data', async (req, res) => {
     } = req.body;
 
     if (
-        !dataid ||
-        !timestamp ||
-        !soilmoisture ||
-        !temperature ||
-        !humidity ||
-        !valvestatus ||
-        !waterflow ||
-        !distance
+        dataid === undefined ||
+        timestamp === undefined ||
+        soilmoisture === undefined ||
+        temperature === undefined ||
+        humidity === undefined ||
+        valvestatus === undefined ||
+        waterflow === undefined ||
+        distance === undefined
     ) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
-
+    
     try {
         const query = `
             INSERT INTO sensordata (dataid, timestamp, soilmoisture, temperature, humidity, valvestatus, waterflow,distance)
