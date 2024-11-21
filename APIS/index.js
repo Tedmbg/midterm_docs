@@ -30,6 +30,46 @@ app.get('/test', (req, res) => {
     res.json({ message: 'API is working!', status: 'success' });
 });
 
+// authenticate national id from esp32
+app.post('/esp/auth', async (req, res) => {
+    const { nationalid } = req.body;
+  
+    // Validate request
+    if (!nationalid) {
+      return res.status(400).json({ error: 'National ID is required' });
+    }
+  
+    try {
+      // Query the database for the user
+      const result = await pool.query(
+        'SELECT id, name, nationalid FROM users WHERE nationalid = $1',
+        [nationalid]
+      );
+  
+      // Check if user exists
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+  
+      // Retrieve user data
+      const user = result.rows[0];
+  
+      // Return user data as JSON
+      return res.status(200).json({
+        status: 'success',
+        message: 'User authenticated successfully',
+        user: {
+          id: user.id,
+          name: user.name,
+          nationalid: user.nationalid,
+        },
+      });
+    } catch (error) {
+      console.error('Error authenticating user:', error.message);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
 // Sign-In Route
 app.post('/auth/signin', async (req, res) => {
     const { nationalid, logincredentials } = req.body;
