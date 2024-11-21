@@ -100,14 +100,22 @@ app.post('/auth/signin', async (req, res) => {
             return res.status(401).json({ error: 'Invalid National ID or Password' });
         }
 
+        // Calculate plant age
+        const currentDate = new Date();
+        const datePlanted = new Date(user.dateplanted);
+        const plantAge = Math.floor((currentDate - datePlanted) / (1000 * 60 * 60 * 24)); // Age in days
+
         // Success - Send user details
         return res.status(200).json({
             status: 'success',
             message: 'Sign-in successful',
             user: {
-                id: user.id,
                 name: user.name,
                 nationalid: user.nationalid,
+                cropsplanted: user.cropsplanted,
+                dateplanted: user.dateplanted,
+                plantAge: plantAge, 
+                farmlocation:user.farmlocation,
             },
         });
     } catch (err) {
@@ -115,6 +123,7 @@ app.post('/auth/signin', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
+
 
 
 //Route add users
@@ -275,6 +284,56 @@ app.post('/add/weather_data', async (req, res) => {
         res.status(500).json({ error: 'Database insertion failed' });
     }
 });
+
+//details for card 1
+app.get('/api/card1', async (req, res) => {
+    try {
+      // Query the latest data from sensordata table using timestamp
+      const sensorResult = await pool.query(
+        `SELECT humidity, soilmoisture, temperature 
+         FROM sensordata 
+         ORDER BY timestamp DESC 
+         LIMIT 1`
+      );
+  
+      // Query the latest data from weatherdata table using timestamp
+      const weatherResult = await pool.query(
+        `SELECT windspeed, cloudcover 
+         FROM weatherdata 
+         ORDER BY timestamp DESC 
+         LIMIT 1`
+      );
+  
+      // Ensure data exists in both tables
+      if (sensorResult.rows.length === 0 || weatherResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No data found' });
+      }
+  
+      // Extract data
+      const sensorData = sensorResult.rows[0];
+      const weatherData = weatherResult.rows[0];
+  
+      // Convert windspeed to km/h
+      const windspeedKmh = weatherData.windspeed * 3.6;
+  
+      // Format and send the response
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          humidity: sensorData.humidity,
+          soilmoisture: sensorData.soilmoisture,
+          temperature: sensorData.temperature,
+          windspeed: windspeedKmh.toFixed(2), // Rounded to 2 decimal places
+          cloudcover: `${weatherData.cloudcover}%`, // Already in percentage
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching data:', error.message);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  
 
 
 // Start the server
