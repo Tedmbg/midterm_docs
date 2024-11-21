@@ -42,7 +42,7 @@ app.post('/esp/auth', async (req, res) => {
     try {
       // Query the database for the user
       const result = await pool.query(
-        'SELECT  name, nationalid FROM users WHERE nationalid = $1',
+        'SELECT  name, nationalid, cropplanted, dateplanted FROM users WHERE nationalid = $1',
         [nationalid]
       );
   
@@ -62,8 +62,8 @@ app.post('/esp/auth', async (req, res) => {
           id: user.id,
           name: user.name,
           nationalid: user.nationalid,
-          cropsplanted: user.cropsplanted,
-          dateplanted: user.dateplanted,
+          cropsplanted: user.cropsplanted || 'No Crops',
+          dateplanted: user.dateplanted || 'No date',
         },
       });
     } catch (error) {
