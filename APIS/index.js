@@ -62,6 +62,8 @@ app.post('/esp/auth', async (req, res) => {
           id: user.id,
           name: user.name,
           nationalid: user.nationalid,
+          cropsplanted: user.cropsplanted,
+          dateplanted: user.dateplanted,
         },
       });
     } catch (error) {
