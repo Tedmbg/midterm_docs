@@ -30,8 +30,50 @@ app.get('/test', (req, res) => {
     res.json({ message: 'API is working!', status: 'success' });
 });
 
+// Sign-In Route
+app.post('/auth/signin', async (req, res) => {
+    const { nationalid, logincredentials } = req.body;
+
+    if (!nationalid || !logincredentials) {
+        return res.status(400).json({ error: 'National ID and Password are required' });
+    }
+
+    try {
+        // Check if user exists with the provided national ID
+        const result = await pool.query(
+            'SELECT * FROM users WHERE nationalid = $1',
+            [nationalid]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Invalid National ID or Password' });
+        }
+
+        const user = result.rows[0];
+
+        // Verify password (assuming passwords are hashed, else do a direct string comparison)
+        const isPasswordValid = await bcrypt.compare(logincredentials, user.logincredentials);
+
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: 'Invalid National ID or Password' });
+        }
+
+        // Success - Send user details
+        return res.status(200).json({
+            status: 'success',
+            message: 'Sign-in successful',
+            user: {
+                id: user.id,
+                name: user.name,
+                nationalid: user.nationalid,
+            },
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 //Route add users
-// Route to insert user signup data
 app.post('/add/user', async (req, res) => {
     const {
         name,
