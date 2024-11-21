@@ -290,7 +290,7 @@ app.get('/api/card1', async (req, res) => {
     try {
       // Query the latest data from sensordata table using timestamp
       const sensorResult = await pool.query(
-        `SELECT humidity, soilmoisture, temperature 
+        `SELECT humidity, soilmoisture, temperature ,distance
          FROM sensordata 
          ORDER BY timestamp DESC 
          LIMIT 1`
@@ -323,12 +323,53 @@ app.get('/api/card1', async (req, res) => {
           humidity: sensorData.humidity,
           soilmoisture: sensorData.soilmoisture,
           temperature: sensorData.temperature,
-          windspeed: windspeedKmh.toFixed(2), // Rounded to 2 decimal places
-          cloudcover: `${weatherData.cloudcover}%`, // Already in percentage
+          windspeed: windspeedKmh.toFixed(2), 
+          cloudcover: `${weatherData.cloudcover}%`, 
+          distance:sensorData.distance,
         },
       });
     } catch (error) {
       console.error('Error fetching data:', error.message);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  //irrigation schedule data
+  app.get('/api/irrigationschedule/card2', async (req, res) => {
+    try {
+      // Fetch the latest irrigation schedule with specific columns
+      const latestResult = await pool.query(
+        `SELECT starttime, endtime, watervolume, duration
+         FROM irrigationschedule
+         ORDER BY starttime DESC
+         LIMIT 1`
+      );
+  
+      // Fetch count of distinct watering dates
+      const countResult = await pool.query(
+        `SELECT COUNT(DISTINCT DATE(starttime)) AS watering_count
+         FROM irrigationschedule`
+      );
+  
+      // Ensure data exists in the table
+      if (latestResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No irrigation data found' });
+      }
+  
+      // Extract results
+      const latestIrrigation = latestResult.rows[0];
+      const wateringCount = countResult.rows[0].watering_count;
+  
+      // Respond with data
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          latestIrrigation, // Includes only starttime, endtime, watervolume, and duration
+          wateringCount, // Total number of distinct watering dates
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching irrigation data:', error.message);
       return res.status(500).json({ error: 'Internal server error' });
     }
   });
