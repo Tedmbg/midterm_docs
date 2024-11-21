@@ -42,7 +42,7 @@ app.post('/esp/auth', async (req, res) => {
     try {
       // Query the database for the user
       const result = await pool.query(
-        'SELECT  name, nationalid, cropplanted, dateplanted FROM users WHERE nationalid = $1',
+        'SELECT  name, nationalid, cropsplanted, dateplanted FROM users WHERE nationalid = $1',
         [nationalid]
       );
   
