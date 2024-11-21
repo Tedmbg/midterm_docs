@@ -51,8 +51,8 @@ app.post('/auth/signin', async (req, res) => {
 
         const user = result.rows[0];
 
-        // Verify password (assuming passwords are hashed, else do a direct string comparison)
-        const isPasswordValid = await bcrypt.compare(logincredentials, user.logincredentials);
+        // Verify password using plain text comparison
+        const isPasswordValid = logincredentials === user.logincredentials;
 
         if (!isPasswordValid) {
             return res.status(401).json({ error: 'Invalid National ID or Password' });
@@ -73,6 +73,8 @@ app.post('/auth/signin', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
+
+
 //Route add users
 app.post('/add/user', async (req, res) => {
     const {
@@ -104,6 +106,9 @@ app.post('/add/user', async (req, res) => {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
+        // // Hash the password before saving
+        // const hashedPassword = await bcrypt.hash(logincredentials, 10);
+
     try {
         const query = `
             INSERT INTO users (name, contactinfo, logincredentials, farmlocation, soiltype, cropsplanted, nationalid, userid, age, dateplanted)
@@ -112,7 +117,7 @@ app.post('/add/user', async (req, res) => {
         await pool.query(query, [
             name,
             contactinfo,
-            logincredentials,
+            logincredential,
             farmlocation,
             soiltype,
             cropsplanted,
