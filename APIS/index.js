@@ -375,9 +375,9 @@ app.get('/api/irrigationschedule/card2', async (req, res) => {
   let isControllerOn = false; // Initialize the state
 
 // Route to get the current state
-app.get('/api/controller/state', (req, res) => {
-    res.json({ status: 'success', isControllerOn });
-});
+// app.get('/api/controller/state', (req, res) => {
+//     res.json({ status: 'success', isControllerOn });
+// });
 
 // Route to update the state
 app.post('/api/controller/state', (req, res) => {
