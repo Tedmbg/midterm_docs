@@ -372,6 +372,26 @@ app.get('/api/irrigationschedule/card2', async (req, res) => {
     }
   });
   
+  let isControllerOn = false; // Initialize the state
+
+// Route to get the current state
+app.get('/api/controller/state', (req, res) => {
+    res.json({ status: 'success', isControllerOn });
+});
+
+// Route to update the state
+app.post('/api/controller/state', (req, res) => {
+    const { state } = req.body;
+
+    if (state === undefined) {
+        return res.status(400).json({ error: 'State is required' });
+    }
+
+    isControllerOn = state; // Update the state
+    console.log(`Controller state updated: ${isControllerOn}`);
+    res.json({ status: 'success', message: 'State updated', isControllerOn });
+});
+
 
 // Start the server
 const port = process.env.PORT || 3000; // Use the PORT environment variable or default to 3000
