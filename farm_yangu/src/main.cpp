@@ -3,10 +3,12 @@
 #include <Keypad.h>
 #include <DHT.h>
 #include <RTClib.h> // for rtc module.
-#include <Wire.h> // thsi is for I2C communication pins
+#include <Wire.h> // this is for I2C communication pins
 #include <WiFi.h> // this is the wifi module
 #include <HTTPClient.h> // for api's
 #include <ArduinoJson.h> // for JSON parsing
+#include <TimeLib.h> // Include TimeLib.h for time conversion
+
 
 // wifi connection details
 const char* ssid = "Nexacore";
@@ -63,16 +65,24 @@ unsigned long lastFlowReadTime = 0;
 const unsigned long flowInterval = 1000;  // Measure flow rate every 1 second
 float calibrationFactor = 450.0;  // Pulses per liter for the flow sensor
 
-//time for sending data
+//time for sensor data.
 unsigned long lastSendTime = 0;  // Tracks the last time data was sent
 const unsigned long sendInterval = 600000;  // 10 min interval
 
+//esp32 on time
+unsigned long lastFetchTime = 0; // Store the last time the function was called
+const unsigned long fetchInterval = 10000; // 10 seconds in milliseconds
+
 //time for weather
 unsigned long lastpullTime = 0;  // Tracks the last time data was pulled and sent
-const unsigned long sendWeatherInterval = 300000;  // 5min interval
+const unsigned long sendWeatherInterval = 600000;  // 10min interval
+
 
 float temperature = 0.0; // Global variable for temperature
 float humidity = 0.0;    // Global variable for humidity
+
+//check if user is logged in
+bool userLoggedIn = false;
 
 void IRAM_ATTR countPulse(){
   pulseCount ++;
@@ -104,8 +114,350 @@ int cloudCover = 0;
 String forecast = "";
 String weatherId = "";
 
+//data from user table
+String cropsPlanted = "";
+String datePlanted = "";
+
+//declared functions
+bool verifyNationalId(String nationalId);
+void loginSound(String type);
+
+// turn on off variable
+bool isControllerOn = false;
+
+
+
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>fuctions
+
+// Function to turn off the ESP32 (Deep Sleep)
+void fetchControllerState() {
+    lcd.clear();
+    lcd.backlight();
+    lcd.setCursor(0, 0);
+
+    if (WiFi.status() == WL_CONNECTED) {
+        lcd.print("Fetching state...");
+        HTTPClient http;
+        http.begin("https://midtermdocs-production.up.railway.app/api/controller/state"); // Replace with your API endpoint
+        int httpResponseCode = http.GET();
+
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            Serial.println("Server Response: " + response);
+
+            // Parse JSON response
+            DynamicJsonDocument doc(1024);
+            DeserializationError error = deserializeJson(doc, response);
+
+            if (!error) {
+                // Parse controller state
+                bool isControllerOn = doc["isControllerOn"];
+                Serial.print("Controller State: ");
+                Serial.println(isControllerOn ? "ON" : "OFF");
+
+                // Update LCD with state
+                lcd.clear();
+                lcd.setCursor(0, 0);
+                lcd.print("Controller:");
+                lcd.setCursor(0, 1);
+                lcd.print(isControllerOn ? "ON" : "OFF");
+
+                // Handle ESP32 power state
+                if (!isControllerOn) {
+                    Serial.println("Entering Deep Sleep...");
+                    lcd.clear();
+                    lcd.setCursor(0, 0);
+                    lcd.print("Shutting down...");
+                    delay(2000);
+
+                    // Enter deep sleep mode
+                    esp_deep_sleep_start();
+                }
+            } else {
+                Serial.println("JSON parsing failed");
+                lcd.clear();
+                lcd.setCursor(0, 0);
+                lcd.print("JSON parse fail!");
+            }
+        } else {
+            Serial.print("HTTP GET failed, code: ");
+            Serial.println(httpResponseCode);
+
+            // Display error code on LCD
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("HTTP GET Error:");
+            lcd.setCursor(0, 1);
+            lcd.print(httpResponseCode);
+        }
+
+        http.end();
+    } else {
+        Serial.println("WiFi not connected");
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("WiFi not");
+        lcd.setCursor(0, 1);
+        lcd.print("connected");
+    }
+
+    delay(3000); // Pause to let the message display on the LCD
+}
+
+
+// get memory
+void boardStatus() {
+    // Flash memory size
+    lcd.backlight();
+    uint32_t flashSize = ESP.getFlashChipSize();
+    Serial.print("Flash chip size: ");
+    Serial.print(flashSize / 1024 / 1024); // Convert bytes to MB
+    Serial.println(" MB");
+    lcd.setCursor(0, 0);
+    lcd.print("Flash Size:");
+    lcd.print(flashSize / 1024 / 1024);
+    lcd.print("MB");
+
+    // Flash frequency
+    uint32_t flashFrequency = ESP.getFlashChipSpeed();
+    Serial.print("Flash chip frequency: ");
+    Serial.print(flashFrequency / 1000000); // Convert Hz to MHz
+    Serial.println(" MHz");
+    lcd.setCursor(0, 1);
+    lcd.print("Freq: ");
+    lcd.print(flashFrequency / 1000000);
+    lcd.print(" MHz");
+
+    delay(3000); // Allow time for LCD to display the data
+
+    // Flash memory usage
+    size_t sketchSize = ESP.getSketchSize();
+    size_t freeFlash = flashSize - sketchSize;
+    float flashUsagePercentage = ((float)sketchSize / flashSize) * 100;
+    
+    Serial.print("Sketch size: ");
+    Serial.print(sketchSize / 1024); // Convert bytes to KB
+    Serial.println(" KB");
+    Serial.print("Free flash memory: ");
+    Serial.print(freeFlash / 1024); // Convert bytes to KB
+    Serial.println(" KB");
+    Serial.print("Flash usage: ");
+    Serial.print(flashUsagePercentage);
+    Serial.println(" %");
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Flash Used:");
+    lcd.print((int)flashUsagePercentage);
+    lcd.print("%");
+
+    delay(3000); // Allow time for LCD to display the data
+
+    // SRAM usage
+    size_t freeHeap = ESP.getFreeHeap();
+    size_t totalHeap = ESP.getHeapSize();
+    float heapUsagePercentage = ((float)(totalHeap - freeHeap) / totalHeap) * 100;
+
+    Serial.print("Total SRAM: ");
+    Serial.print(totalHeap / 1024); // Convert bytes to KB
+    Serial.println(" KB");
+    Serial.print("Free SRAM: ");
+    Serial.print(freeHeap / 1024); // Convert bytes to KB
+    Serial.println(" KB");
+    Serial.print("SRAM usage: ");
+    Serial.print(heapUsagePercentage);
+    Serial.println(" %");
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("SRAM Used:");
+    lcd.print((int)heapUsagePercentage);
+    lcd.print("%");
+
+    delay(3000); // Allow time for LCD to display the data
+    lcd.clear();
+
+
+}
+
+
+// login function
+void userLogin() {
+    lcd.clear();
+    unsigned long lastSoundTime = 0;
+    const unsigned long soundInterval = 2000; // Interval for the beeping sound
+    String enteredId = "";
+
+    while (true) {
+        // Play the beep sound at intervals
+        if (millis() - lastSoundTime > soundInterval) {
+            loginSound("alternate");
+            lastSoundTime = millis();
+        }
+
+        // Prompt the user to enter their National ID
+        lcd.setCursor(0, 0);
+        lcd.print("Enter Ntl ID:");
+
+        // Check for key input
+        char key = keypad.getKey();
+        if (key) {
+            if (key == '#') { // Submit
+                if (enteredId.length() == 0) {
+                    // If no input, prompt user again
+                    lcd.setCursor(0, 1);
+                    lcd.print("ID cannot be empty");
+                    delay(2000);
+                    lcd.clear();
+                    continue;
+                }
+
+                // Display "Checking" and validate
+                lcd.setCursor(0, 1);
+                lcd.print("Checking...");
+                delay(500);
+
+                if (verifyNationalId(enteredId)) {
+                    lcd.clear();
+                    lcd.setCursor(0, 0);
+                    lcd.print("Login Success!");
+                    loginSound("success"); // Play success sound
+                    delay(2000);
+
+                    userLoggedIn = true; // Mark user as logged in
+
+                    // Display crop and planting date
+                    lcd.clear();
+                    lcd.setCursor(0, 0);
+                    lcd.print("Crops: ");
+                    Serial.print("Crops: ");
+                    Serial.println(cropsPlanted);
+                    lcd.print(cropsPlanted);
+                    lcd.setCursor(0, 1);
+                    Serial.print("datePlanted: ");
+                    Serial.println(datePlanted);
+                    lcd.print("Planted: ");
+                    lcd.print(datePlanted);
+
+                    delay(5000);
+                    lcd.clear();
+                    return; // Exit login loop
+                } else {
+                    // Invalid ID
+                    lcd.setCursor(0, 1);
+                    lcd.print("Invalid ID!");
+                    loginSound("failure"); // Play failure sound
+                    delay(2000);
+                    lcd.clear();
+                    enteredId = ""; // Reset input
+                }
+            } else if (key == '*') { // Clear input
+                enteredId = "";
+                lcd.setCursor(0, 1);
+                lcd.print("                "); // Clear the second line
+            } else { // Append key to entered ID
+                enteredId += key;
+                lcd.setCursor(0, 1);
+                lcd.print(enteredId);
+            }
+        }
+    }
+}
+
+// login beep sound
+void loginSound(String pattern) {
+  if (pattern == "success") {
+    // Two high-pitched beeps
+    for (int i = 0; i < 2; i++) {
+      tone(BUZZER_PIN, 1000); // High tone
+      delay(200);
+      noTone(BUZZER_PIN);    // Turn off tone
+      delay(200);            // Pause between beeps
+    }
+  } 
+  else if (pattern == "failure") {
+    // Three low-pitched beeps
+    for (int i = 0; i < 3; i++) {
+      tone(BUZZER_PIN, 500); // Low tone
+      delay(300);
+      noTone(BUZZER_PIN);
+      delay(150);            // Short pause between beeps
+    }
+  } 
+  else if (pattern == "alternate") {
+    // High and low-pitched beeps alternating
+    for (int i = 0; i < 2; i++) {
+      tone(BUZZER_PIN, 1000); // High tone
+      delay(200);
+      noTone(BUZZER_PIN);
+      delay(100);
+      tone(BUZZER_PIN, 500);  // Low tone
+      delay(300);
+      noTone(BUZZER_PIN);
+      delay(200);
+    }
+  } 
+  else {
+    // Default case if the pattern doesn't match
+    Serial.println("Invalid login sound pattern.");
+  }
+}
+
+//verify user data
+bool verifyNationalId(String nationalId) {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi disconnected");
+        return false;
+    }
+
+    HTTPClient http;
+    http.begin("https://midtermdocs-production.up.railway.app/esp/auth"); // Replace with your API endpoint
+    http.addHeader("Content-Type", "application/json");
+
+    // Create JSON payload
+    String payload = "{\"nationalid\":\"" + nationalId + "\"}";
+    int httpResponseCode = http.POST(payload);
+
+    if (httpResponseCode > 0) {
+        String response = http.getString();
+        Serial.println("Server Response: " + response);
+
+        // Check for success in the response
+        if (response.indexOf("\"status\":\"success\"") != -1) {
+            // Parse JSON response using ArduinoJson library
+            DynamicJsonDocument doc(1024);
+            DeserializationError error = deserializeJson(doc, response);
+
+            if (error) {
+                Serial.print("JSON parsing failed: ");
+                Serial.println(error.c_str());
+                return false;
+            }
+
+            // Extract cropsPlanted and datePlanted from JSON
+            cropsPlanted = doc["user"]["cropsplanted"].as<String>();
+            datePlanted = doc["user"]["dateplanted"].as<String>();
+
+            // Print to Serial for debugging
+            Serial.println("Crops Planted: " + cropsPlanted);
+            Serial.println("Date Planted: " + datePlanted);
+
+            http.end();
+            return true;
+        } else {
+            Serial.println("Authentication failed");
+        }
+    } else {
+        Serial.print("HTTP Request failed, Error code: ");
+        Serial.println(httpResponseCode);
+    }
+
+    http.end();
+    return false;
+}
+
+
 // play sound
 void playSiren(){
   tone(BUZZER_PIN,1000);
@@ -113,6 +465,7 @@ void playSiren(){
   tone(BUZZER_PIN,500);
   delay(300);
 }
+
 
 // ####################### get distance
 int getDistance(){
@@ -270,42 +623,91 @@ void timeModuleCheck(){
 // ⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️⌚️ Display time on lcd
 String displayTime() {
     // Get the current time from the RTC
-    DateTime now = rtc.now();  // Get the current time
+    DateTime now = rtc.now();
+
+    // Convert to 12-hour format
+    int hour = now.hour();
+    String meridian = "AM";
+    if (hour >= 12) {
+        meridian = "PM";
+        if (hour > 12) hour -= 12;  // Convert to 12-hour format
+    } else if (hour == 0) {
+        hour = 12;  // Midnight is 12 AM
+    }
+
+    // Fetch month and year
+    int month = now.month();
+    int year = now.year(); // Full year (e.g., 2024)
+
+    // Optionally, fetch the day of the month
+    int day = now.day();
 
     // Display time on the LCD
     lcd.clear();
     lcd.backlight();
-    lcd.setCursor(0, 0);  // Set cursor to the beginning to avoid clearing
-
-    // Print time to LCD in format HH:MM:SS
+    lcd.setCursor(0, 0); // First line
     lcd.print("Time: ");
-    if (now.hour() < 10) lcd.print('0'); // Add leading zero for single-digit hours
-    lcd.print(now.hour(), DEC);
+    if (hour < 10) lcd.print('0'); // Add leading zero for single-digit hours
+    lcd.print(hour);
     lcd.print(':');
     if (now.minute() < 10) lcd.print('0'); // Add leading zero for single-digit minutes
-    lcd.print(now.minute(), DEC);
+    lcd.print(now.minute());
     lcd.print(':');
     if (now.second() < 10) lcd.print('0'); // Add leading zero for single-digit seconds
-    lcd.print(now.second(), DEC);
+    lcd.print(now.second());
+    lcd.print(" ");
+    lcd.print(meridian);
 
-    // Print time to Serial Monitor in the same format
+    // Display date on the second line of the LCD
+    lcd.setCursor(0, 1); // Second line
+    lcd.print("Date: ");
+    if (month < 10) lcd.print('0'); // Add leading zero for single-digit months
+    lcd.print(month);
+    lcd.print('/');
+    if (day < 10) lcd.print('0'); // Add leading zero for single-digit days
+    lcd.print(day);
+    lcd.print('/');
+    lcd.print(year);
+
+    // Print time and date to Serial Monitor
     Serial.print("Time: ");
-    if (now.hour() < 10) Serial.print('0');
-    Serial.print(now.hour(), DEC);
+    if (hour < 10) Serial.print('0');
+    Serial.print(hour);
     Serial.print(':');
     if (now.minute() < 10) Serial.print('0');
-    Serial.print(now.minute(), DEC);
+    Serial.print(now.minute());
     Serial.print(':');
     if (now.second() < 10) Serial.print('0');
-    Serial.println(now.second(), DEC);
-    
-    char buffer[20];
-    sprintf(buffer, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-    return String(buffer);
+    Serial.print(now.second());
+    Serial.print(" ");
+    Serial.print(meridian);
+    Serial.print(" | Date: ");
+    if (month < 10) Serial.print('0');
+    Serial.print(month);
+    Serial.print('/');
+    if (day < 10) Serial.print('0');
+    Serial.print(day);
+    Serial.print('/');
+    Serial.println(year);
 
-    delay(3000);  // Refresh every second
+    lcd.clear();
+
+    // Return the time and date as a string (optional)
+    char buffer[25];
+    sprintf(buffer, "%02d:%02d:%02d %s | %02d/%02d/%04d", hour, now.minute(), now.second(), meridian.c_str(), month, day, year);
+    return String(buffer);
 }
 
+
+// timestamp for sending to weatherdata table.
+String getISO8601TimestampUTC() {
+    DateTime utcTime = rtc.now();
+    char buffer[20];
+    sprintf(buffer, "%04d-%02d-%02d %02d:%02d:%02d",
+            utcTime.year(), utcTime.month(), utcTime.day(),
+            utcTime.hour(), utcTime.minute(), utcTime.second());
+    return String(buffer);
+}
 
 //waterFlow sensor
 float waterFlowSensor(){
@@ -441,7 +843,7 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
             // Print on LCD
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Server Response:");
+            lcd.print("Snr Response:");
             lcd.setCursor(0, 1);
             lcd.print(response);
             delay(4000);
@@ -467,10 +869,7 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
     }
 }
 
-
-
 // read sensor data and send
-
 void readSensorData(float temperature, float humidity, int soilMoistureValue, String valveStatus, float waterFlow, String currentTime,int distance){
    // Read sensor data
     // float temperature = dht.readTemperature();
@@ -553,6 +952,13 @@ void readSensorData(float temperature, float humidity, int soilMoistureValue, St
     delay(5000); // Wait before the next iteration
 }
 
+//get crop age
+int calculateCropAge(DateTime plantingDate, DateTime currentDate) {
+    TimeSpan age = currentDate - plantingDate;
+    return age.days(); // or age in weeks/months as required
+}
+
+
 
 // Function to fetch weather data from API
 void fetchWeatherData() {
@@ -562,7 +968,7 @@ void fetchWeatherData() {
     String apiKey = "81f360187f497f7d31d712d1c08bd0e1"; // OpenWeatherMap API key
     String city = "Nairobi";         // Replace with your city
     String units = "metric";        // Use "imperial" for Fahrenheit
-    String apiUrl = "http://api.openweathermap.org/data/2.5/weather?q=" + city + "&units=" + units + "&appid=" + apiKey;
+    String apiUrl = "https://api.openweathermap.org/data/2.5/weather?q=" + city + "&units=" + units + "&appid=" + apiKey;
 
     http.begin(apiUrl);
     int httpResponseCode = http.GET();
@@ -583,8 +989,11 @@ void fetchWeatherData() {
         return;
       }
 
+      // Convert UNIX timestamp to ISO 8601 format
+    long unixTime = doc["dt"].as<long>();
+ 
       // Extract data
-      weatherTimestamp = String(doc["dt"].as<long>()); // Unix timestamp
+      weatherTimestamp = getISO8601TimestampUTC();
       weatherTemperature = doc["main"]["temp"].as<float>();
       weatherHumidity = doc["main"]["humidity"].as<float>();
       windSpeed = doc["wind"]["speed"].as<float>();
@@ -608,6 +1017,7 @@ void fetchWeatherData() {
     } else {
       Serial.print("Error on HTTP request: ");
       Serial.println(httpResponseCode);
+      delay(3000);
     }
 
     http.end();
@@ -642,13 +1052,34 @@ void sendWeatherDataToServer() {
     // Send the POST request
     int httpResponseCode = http.POST(jsonPayload);
 
+      lcd.clear();
+      lcd.backlight();
+     
+
     if (httpResponseCode > 0) {
       String response = http.getString();
       Serial.println("Server Response:");
       Serial.println(response);
+
+      // Print on LCD
+      lcd.setCursor(0, 0);
+      lcd.print("Wth Response:");
+      lcd.setCursor(0, 1);
+      lcd.print(httpResponseCode);
+      delay(4000);
+      lcd.clear();
+
     } else {
       Serial.print("Error on sending POST: ");
       Serial.println(httpResponseCode);
+
+      //lcd
+      lcd.setCursor(0, 0);
+      lcd.print("HTTP Error:");
+      lcd.setCursor(0, 1);
+      lcd.print(httpResponseCode);
+      delay(4000);
+      lcd.clear();
     }
 
     http.end();
@@ -662,6 +1093,8 @@ void sendWeatherDataToServer() {
 // 🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁
 void setup() {
 Serial.begin(115200);
+
+   
 
   //seting up the 5v relay
   pinMode(RELAY_PIN,OUTPUT); // set this pin as an output
@@ -683,8 +1116,19 @@ Serial.begin(115200);
   // initialize the sensors
   startSensors();
 
+  // login
+    if (!userLoggedIn) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Please Login");
+        delay(4000);
+        userLogin(); // Prompt for login
+    }
+
   //initialize the RTC module
   timeModuleCheck();
+
+  boardStatus();
 
 
  lcd.noBacklight();
@@ -694,19 +1138,10 @@ Serial.begin(115200);
   pinMode(ECHO_PIN, INPUT);  // gets data/signal from the sensor.
   
   
-
   // Initialize DHT Sensor
   dht.begin();
   checkDHT();
 
-
-
-  //print startup message
-  // lcd.clear();
-  // lcd.setCursor(0,0);
-  // lcd.print("Keypad,LCD Test");
-  // lcd.setCursor(0,1);
-  // lcd.print("Press a key...");
 
   // Initialize all readings to zero
   for (int i = 0; i < numReadings; i++) {
@@ -717,16 +1152,47 @@ Serial.begin(115200);
 }
 // 🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂
 void loop() {
+   // powering esp32
+    if (millis() - lastFetchTime >= fetchInterval) {
+        Serial.println("Refreshing controller state...");
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Refreshing...");
+        
+        fetchControllerState();
+        lastFetchTime = millis();
+        
+        lcd.clear();
+    }
+
+    //restart the board.
+    esp_sleep_enable_timer_wakeup(10 * 1000000); // Wake up after 10 seconds
+    esp_deep_sleep_start();
+
   // check if a key is pressed
   char key = keypad.getKey();
 
-  // //display time
-  // lcd.backlight();
-  // displayTime();
-  // delay(3000);
+   // If logged in, handle the logout action
+    if (!userLoggedIn) {
+        // If not logged in, prompt for login
+        userLogin();  
+        return;       
+    }
+
+
+     // Handle logout if the user is logged in
+    if (key == '#') { // Logout key
+        userLoggedIn = false;
+        lcd.backlight();
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Logged Out");
+        delay(3000);
+        lcd.clear();
+        return; 
+    }
 
   Serial.println("<<<<<>>>>>>>>>>"+key);
-
 
 // turn of the screen
  if (millis() - lastKeyPressTime > backlightTimeout) {
@@ -740,18 +1206,6 @@ void loop() {
     lastDistanceTime = millis();
   }
  
-  // test Solenoid valve
-  if (key == '6'){
-    lcd.backlight();
-    lcd.clear();
-    lcd.print("Key pressed: ");
-    lcd.println(key);
-    Serial.println("$$$$$$$$$$$$$$$$$$ Solenoid Activated");
-    digitalWrite(RELAY_PIN,HIGH);
-    delay(10000);
-    digitalWrite(RELAY_PIN,LOW);
-    Serial.println("Solenoid deactivated");
-  }
 
  // display the time
   if (key == '1'){
@@ -823,8 +1277,20 @@ void loop() {
 
   }
 
+  // test Solenoid valve
+  if (key == '6'){
+    lcd.backlight();
+    lcd.clear();
+    lcd.print("Key pressed: ");
+    lcd.println(key);
+    Serial.println("$$$$$$$$$$$$$$$$$$ Solenoid Activated");
+    digitalWrite(RELAY_PIN,HIGH);
+    delay(10000);
+    digitalWrite(RELAY_PIN,LOW);
+    Serial.println("Solenoid deactivated");
+  }
 
-    // Update sensor data every `sendInterval`
+    // send sensor data
     if (millis() - lastSendTime >= sendInterval) {
 
        // get the humidity and temperature
