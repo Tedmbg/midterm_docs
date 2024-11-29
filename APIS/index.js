@@ -392,6 +392,116 @@ app.post('/api/controller/state', (req, res) => {
     res.json({ status: 'success', message: 'State updated', isControllerOn });
 });
 
+//route to add irrigation schedule
+app.post('/api/add/irrigation_event', async (req, res) => {
+  const {
+      scheduleid,
+      userid,
+      cropid,
+      starttime,
+      endtime,
+      duration,
+      watervolume,
+      status
+  } = req.body;
+
+  if (
+      scheduleid === undefined ||
+      userid === undefined ||
+      cropid === undefined ||
+      starttime === undefined ||
+      endtime === undefined ||
+      duration === undefined ||
+      watervolume === undefined ||
+      status === undefined
+  ) {
+      return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+      const query = `
+          INSERT INTO irrigationschedule (scheduleid, userid, cropid, starttime, endtime, duration, watervolume, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `;
+      await pool.query(query, [
+          scheduleid,
+          userid,
+          cropid,
+          starttime,
+          endtime,
+          duration,
+          watervolume,
+          status
+      ]);
+      res.status(200).json({ status: 'success' });
+  } catch (err) {
+      console.error(err.message);
+      res.status(500).json({ error: 'Database insertion failed' });
+  }
+});
+
+// irrigating data
+
+// Route to fetch latest sensor and weather data
+app.get('/api/latest_data', async (req, res) => {
+  try {
+      // Get current date in YYYY-MM-DD format
+      const currentDate = new Date().toISOString().split('T')[0];
+
+      const sensorQuery = `
+          SELECT MAX(temperature) AS max_temperature, MIN(temperature) AS min_temperature
+          FROM sensordata
+          WHERE DATE(timestamp) = $1
+      `;
+      const weatherQuery = 'SELECT cloudcover FROM weatherdata ORDER BY timestamp DESC LIMIT 1';
+
+      const sensorResult = await pool.query(sensorQuery, [currentDate]);
+      const weatherResult = await pool.query(weatherQuery);
+
+      if (sensorResult.rows.length === 0 || weatherResult.rows.length === 0 || sensorResult.rows[0].max_temperature === null || sensorResult.rows[0].min_temperature === null) {
+          return res.status(404).json({ error: 'No data found' });
+      }
+
+      res.status(200).json({
+          max_temperature: parseFloat(sensorResult.rows[0].max_temperature),
+          min_temperature: parseFloat(sensorResult.rows[0].min_temperature),
+          cloudCover: weatherResult.rows[0].cloudcover
+      });
+  } catch (err) {
+      console.error(err.message);
+      res.status(500).json({ error: 'Database query failed' });
+  }
+});
+
+// Route to fetch Kc value based on crop age
+app.get('/api/get_kc', async (req, res) => {
+  const cropId = req.query.cropid;
+  const cropAgeWeeks = parseInt(req.query.cropageweeks);
+
+  if (!cropId || isNaN(cropAgeWeeks)) {
+      return res.status(400).json({ error: 'Missing or invalid parameters' });
+  }
+
+  try {
+      const query = `
+          SELECT kc FROM maizewaterrequirements
+          WHERE cropid = $1 AND startweek <= $2 AND endweek >= $2
+          LIMIT 1
+      `;
+      const result = await pool.query(query, [cropId, cropAgeWeeks]);
+
+      if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'No Kc value found for given crop age' });
+      }
+
+      res.status(200).json({ kc: parseFloat(result.rows[0].kc) });
+  } catch (err) {
+      console.error(err.message);
+      res.status(500).json({ error: 'Database query failed' });
+  }
+});
+
+
 
 // Start the server
 const port = process.env.PORT || 3000; // Use the PORT environment variable or default to 3000
