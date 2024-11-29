@@ -23,6 +23,9 @@ const pool = new Pool({
   },
 });
 
+// variables
+let isControllerOn = false; // Initialize the state
+
 //link to apis midtermdocs-production.up.railway.app
 
 // Test GET endpoint
@@ -372,7 +375,7 @@ app.get('/api/irrigationschedule/card2', async (req, res) => {
     }
   });
   
-  let isControllerOn = false; // Initialize the state
+ 
 
 // Route to get the current state
 app.get('/api/controller/state', (req, res) => {
@@ -484,7 +487,7 @@ app.get('/api/get_kc', async (req, res) => {
 
   try {
       const query = `
-          SELECT kc FROM maizewaterrequirements
+          SELECT kc FROM croprequirements
           WHERE cropid = $1 AND startweek <= $2 AND endweek >= $2
           LIMIT 1
       `;
