@@ -481,6 +481,8 @@ app.get('/api/get_kc', async (req, res) => {
   const cropId = req.query.cropid;
   const cropAgeWeeks = parseInt(req.query.cropageweeks);
 
+  console.log(`This is the cropId ${cropId} and the cropAgeWeeks ${cropAgeWeeks}`);
+
   if (!cropId || isNaN(cropAgeWeeks)) {
       return res.status(400).json({ error: 'Missing or invalid parameters' });
   }
