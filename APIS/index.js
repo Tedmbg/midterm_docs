@@ -173,7 +173,7 @@ app.post("/add/user", async (req, res) => {
     await pool.query(query, [
       name,
       contactinfo,
-      logincredential,
+      logincredentials,
       farmlocation,
       soiltype,
       cropsplanted,
