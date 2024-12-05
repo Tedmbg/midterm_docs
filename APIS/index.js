@@ -142,7 +142,7 @@ app.post("/auth/signin", async (req, res) => {
       status: "success",
       message: "Sign-in successful",
       user: {
-        name: user.name,
+        name: user.f_name,
         nationalid: user.nationalid,
         cropsplanted: user.cropsplanted,
         dateplanted: user.dateplanted,
