@@ -26,6 +26,31 @@ const pool = new Pool({
 // variables
 let isControllerOn = false; // Initialize the state
 
+const cropMaxAgeWeeks = {
+  Maize: 21,
+  Wheat: 30, 
+  // Add more crops and their max ages here
+};
+
+// Utility function to calculate age in weeks
+function calculateAgeInWeeks(datePlanted) {
+  const plantedDate = new Date(datePlanted);
+  const currentDate = new Date();
+
+  // Calculate the difference in milliseconds
+  const diffTime = currentDate - plantedDate;
+
+  if (diffTime < 0) {
+    // datePlanted is in the future
+    return -1;
+  }
+
+  // Convert milliseconds to weeks
+  const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+
+  return diffWeeks;
+}
+
 //link to apis midtermdocs-production.up.railway.app
 
 // Test GET endpoint
@@ -108,9 +133,9 @@ app.post("/auth/signin", async (req, res) => {
     // Calculate plant age
     const currentDate = new Date();
     const datePlanted = new Date(user.dateplanted);
-    const plantAge = Math.floor(
-      (currentDate - datePlanted) / (1000 * 60 * 60 * 24)
-    ); // Age in days
+    const plantAgeWeeks = Math.floor(
+      (currentDate - datePlanted) / (1000 * 60 * 60 * 24 * 7)
+  ); // show age in weeks
 
     // Success - Send user details
     return res.status(200).json({
@@ -121,7 +146,7 @@ app.post("/auth/signin", async (req, res) => {
         nationalid: user.nationalid,
         cropsplanted: user.cropsplanted,
         dateplanted: user.dateplanted,
-        plantAge: plantAge,
+        plantAge: plantAgeWeeks,
         farmlocation: user.farmlocation,
       },
     });
@@ -134,7 +159,8 @@ app.post("/auth/signin", async (req, res) => {
 //Route add users
 app.post("/add/user", async (req, res) => {
   const {
-    name,
+    f_name,
+    l_name,
     contactinfo,
     logincredentials,
     farmlocation,
@@ -148,32 +174,64 @@ app.post("/add/user", async (req, res) => {
 
   // Validate required fields
   if (
-    name === undefined ||
-    contactinfo === undefined ||
-    logincredentials === undefined ||
-    farmlocation === undefined ||
-    soiltype === undefined ||
-    cropsplanted === undefined ||
-    nationalid === undefined ||
-    userid === undefined ||
-    age === undefined ||
-    dateplanted === undefined
+    !f_name ||
+    !l_name ||
+    !contactinfo ||
+    !logincredentials ||
+    !farmlocation ||
+    !soiltype ||
+    !cropsplanted ||
+    !nationalid ||
+    !userid ||
+    !age ||
+    !dateplanted
   ) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  // // Hash the password before saving
+  // Validate crop type
+  if (!cropMaxAgeWeeks.hasOwnProperty(cropsplanted)) {
+    return res.status(400).json({ error: `Unsupported crop type: ${cropsplanted}` });
+  }
+
+  // Calculate age in weeks based on datePlanted
+  const ageInWeeks = calculateAgeInWeeks(dateplanted);
+
+  if (ageInWeeks === -1) {
+    return res.status(400).json({ error: "Date planted cannot be in the future" });
+  }
+
+  const maxAllowedWeeks = cropMaxAgeWeeks[cropsplanted];
+
+  if (ageInWeeks > maxAllowedWeeks) {
+    return res.status(400).json({ error: `The selected crop (${cropsplanted}) has matured. Maximum allowed age is ${maxAllowedWeeks} weeks.` });
+  }
+
+  // Optionally, hash the password before saving
   // const hashedPassword = await bcrypt.hash(logincredentials, 10);
 
   try {
     const query = `
-            INSERT INTO users (name, contactinfo, logincredentials, farmlocation, soiltype, cropsplanted, nationalid, userid, age, dateplanted)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        `;
+      INSERT INTO users (
+        f_name,
+        l_name, 
+        contactinfo, 
+        logincredentials, 
+        farmlocation, 
+        soiltype, 
+        cropsplanted, 
+        nationalid, 
+        userid, 
+        age, 
+        dateplanted
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `;
     await pool.query(query, [
-      name,
+      f_name,
+      l_name,
       contactinfo,
-      logincredentials,
+      logincredentials, // Use hashedPassword if hashing
       farmlocation,
       soiltype,
       cropsplanted,
@@ -481,7 +539,7 @@ app.get('/api/get_kc', async (req, res) => {
   const cropId = req.query.cropid;
   const cropAgeWeeks = parseInt(req.query.cropageweeks);
 
-  console.log(`This is the cropId ${cropId} and the cropAgeWeeks ${cropAgeWeeks}`);
+  // console.log(`This is the cropId ${cropId} and the cropAgeWeeks ${cropAgeWeeks}`);
 
   if (!cropId || isNaN(cropAgeWeeks)) {
       return res.status(400).json({ error: 'Missing or invalid parameters' });
