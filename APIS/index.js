@@ -70,7 +70,7 @@ app.post("/esp/auth", async (req, res) => {
   try {
     // Query the database for the user
     const result = await pool.query(
-      "SELECT  name, nationalid, cropsplanted, dateplanted FROM users WHERE nationalid = $1",
+      "SELECT  f_name, nationalid, cropsplanted, dateplanted FROM users WHERE nationalid = $1",
       [nationalid]
     );
 
@@ -88,7 +88,7 @@ app.post("/esp/auth", async (req, res) => {
       message: "User authenticated successfully",
       user: {
         id: user.id,
-        name: user.name,
+        name: user.f_name,
         nationalid: user.nationalid,
         cropsplanted: user.cropsplanted || "No Crops",
         dateplanted: user.dateplanted || "No date",
