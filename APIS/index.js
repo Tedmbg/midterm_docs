@@ -211,7 +211,18 @@ app.post("/add/user", async (req, res) => {
   // const hashedPassword = await bcrypt.hash(logincredentials, 10);
 
   try {
-    const query = `
+    // Check if the user already exists based on `userid` or `nationalid`
+    const checkQuery = `
+      SELECT * FROM users WHERE userid = $1 OR nationalid = $2
+    `;
+    const existingUser = await pool.query(checkQuery, [userid, nationalid]);
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: "User already exists with the provided userid or nationalid" });
+    }
+
+    // Proceed with insertion if no user exists
+    const insertQuery = `
       INSERT INTO users (
         f_name,
         l_name, 
@@ -227,7 +238,7 @@ app.post("/add/user", async (req, res) => {
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `;
-    await pool.query(query, [
+    await pool.query(insertQuery, [
       f_name,
       l_name,
       contactinfo,
@@ -240,14 +251,14 @@ app.post("/add/user", async (req, res) => {
       age,
       dateplanted,
     ]);
-    res
-      .status(200)
-      .json({ status: "success", message: "User added successfully" });
+
+    res.status(200).json({ status: "success", message: "User added successfully" });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Database insertion failed" });
   }
 });
+
 
 // Route to insert sensor data
 app.post("/add/sensor_data", async (req, res) => {
