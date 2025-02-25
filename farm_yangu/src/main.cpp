@@ -1,7 +1,7 @@
-#include <Arduino.h>
-#include <LiquidCrystal_I2C.h>
-#include <Keypad.h>
-#include <DHT.h>
+#include <Arduino.h> // fro the board
+#include <LiquidCrystal_I2C.h> // for LCD
+#include <Keypad.h> //keypad
+#include <DHT.h> // for temp and humidity
 #include <RTClib.h> // for rtc module.
 #include <Wire.h> // this is for I2C communication pins
 #include <WiFi.h> // this is the wifi module
@@ -10,9 +10,24 @@
 #include <TimeLib.h> // Include TimeLib.h for time conversion
 
 
-// wifi connection details
+
+// Forward declarations of functions used before defined
+int getDistance();
+float waterFlowSensor();
+void humidityTemp(float &temperature, float &humidity);
+
 const char* ssid = "Nexacore";
 const char* password ="Nexacore.@123";
+
+// wifi connection details
+// const char* ssid = "iot";
+// const char* password ="123456789";
+
+// const char* ssid = "Searching";
+// const char* password ="Ndogogio1";
+
+// const char* ssid = "iPhone (5)";
+// const char* password ="kipkuruz";
 
 
 //Define LCD Settings
@@ -71,15 +86,38 @@ const unsigned long sendInterval = 600000;  // 10 min interval
 
 //esp32 on time
 unsigned long lastFetchTime = 0; // Store the last time the function was called
-const unsigned long fetchInterval = 10000; // 10 seconds in milliseconds
+const unsigned long fetchInterval = 30000; // 30 seconds in milliseconds
 
 //time for weather
 unsigned long lastpullTime = 0;  // Tracks the last time data was pulled and sent
 const unsigned long sendWeatherInterval = 600000;  // 10min interval
 
+//time for prevoius keypad get
+unsigned long previousKeypadTime = 0;
+const unsigned long keypadInterval = 50; // Poll every 50ms
 
-float temperature = 0.0; // Global variable for temperature
-float humidity = 0.0;    // Global variable for humidity
+// time for measuring soilmoisture value
+unsigned long lastSoilCheckTime = 0;
+const unsigned long soilCheckInterval = 10 * 60 * 1000; // checks after 10min
+
+// Declare global variables
+int soilMoistureValue = 0;
+int minReading = 0;
+int maxReading = 500;
+float maxSoilDepthMM = 50;
+float temperature = 0, humidity = 0;
+int distance = 0;
+float waterFlow = 0;
+unsigned long lastSensorUpdateTime = 0;
+const unsigned long sensorUpdateInterval = 10 * 60 * 1000; // 10 minutes
+
+void updateSensorData() {
+    soilMoistureValue = analogRead(soilMoisturePin);
+    humidityTemp(temperature, humidity); // Update temperature and humidity
+    distance = getDistance();           // Update water tank distance
+    waterFlow = waterFlowSensor();      // Update water flow
+}
+
 
 //check if user is logged in
 bool userLoggedIn = false;
@@ -115,20 +153,33 @@ String forecast = "";
 String weatherId = "";
 
 //data from user table
+String cropId = "";
 String cropsPlanted = "";
 String datePlanted = "";
+String userName = "";
+
 
 //declared functions
 bool verifyNationalId(String nationalId);
 void loginSound(String type);
+String getCropId(String cropName);
 
 // turn on off variable
-bool isControllerOn = false;
+bool isControllerOn = true;
 
+//irrigation variables
+enum IrrigationState {
+    IRRIGATION_IDLE,
+    IRRIGATION_RUNNING,
+    IRRIGATION_WAITING
+};
 
+IrrigationState irrigationState = IRRIGATION_IDLE;
+unsigned long irrigationStartTime = 0;
+unsigned long irrigationDurationMillis = 10000; // 10 seconds
+int soilMoistureThreshold = 1072; // Adjust as needed
 
-
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>fuctions
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>fuctions<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 // Function to turn off the ESP32 (Deep Sleep)
 void fetchControllerState() {
@@ -151,8 +202,7 @@ void fetchControllerState() {
             DeserializationError error = deserializeJson(doc, response);
 
             if (!error) {
-                // Parse controller state
-                bool isControllerOn = doc["isControllerOn"];
+                isControllerOn = doc["isControllerOn"];
                 Serial.print("Controller State: ");
                 Serial.println(isControllerOn ? "ON" : "OFF");
 
@@ -163,7 +213,7 @@ void fetchControllerState() {
                 lcd.setCursor(0, 1);
                 lcd.print(isControllerOn ? "ON" : "OFF");
 
-                // Handle ESP32 power state
+                // Enter deep sleep only if controller is OFF
                 if (!isControllerOn) {
                     Serial.println("Entering Deep Sleep...");
                     lcd.clear();
@@ -172,6 +222,7 @@ void fetchControllerState() {
                     delay(2000);
 
                     // Enter deep sleep mode
+                    esp_sleep_enable_timer_wakeup(10 * 1000000); // Wake after 10 seconds
                     esp_deep_sleep_start();
                 }
             } else {
@@ -184,7 +235,6 @@ void fetchControllerState() {
             Serial.print("HTTP GET failed, code: ");
             Serial.println(httpResponseCode);
 
-            // Display error code on LCD
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("HTTP GET Error:");
@@ -202,9 +252,8 @@ void fetchControllerState() {
         lcd.print("connected");
     }
 
-    delay(3000); // Pause to let the message display on the LCD
+    delay(3000);
 }
-
 
 // get memory
 void boardStatus() {
@@ -280,7 +329,6 @@ void boardStatus() {
 
 
 }
-
 
 // login function
 void userLogin() {
@@ -438,8 +486,20 @@ bool verifyNationalId(String nationalId) {
             // Extract cropsPlanted and datePlanted from JSON
             cropsPlanted = doc["user"]["cropsplanted"].as<String>();
             datePlanted = doc["user"]["dateplanted"].as<String>();
+            userName = doc["user"]["name"].as<String>();
+
+            //Map crop name to cropId
+            cropId = getCropId(cropsPlanted);
+            if (cropId == ""){
+              Serial.println("unknown crop planted");
+              lcd.clear();
+              lcd.print("Unkown crop");
+              delay(3000);
+              return false;
+            }
 
             // Print to Serial for debugging
+            Serial.println("Welcome " + userName);
             Serial.println("Crops Planted: " + cropsPlanted);
             Serial.println("Date Planted: " + datePlanted);
 
@@ -457,7 +517,6 @@ bool verifyNationalId(String nationalId) {
     return false;
 }
 
-
 // play sound
 void playSiren(){
   tone(BUZZER_PIN,1000);
@@ -465,7 +524,6 @@ void playSiren(){
   tone(BUZZER_PIN,500);
   delay(300);
 }
-
 
 // ####################### get distance
 int getDistance(){
@@ -548,7 +606,6 @@ void checkDHT() {
 
     delay(2000);
 }
-
 
 // @@@@@@@@@@@@@@@@@@@@@@@@@@ humidity temp
 void humidityTemp(float &temperature, float &humidity){
@@ -690,14 +747,13 @@ String displayTime() {
     Serial.print('/');
     Serial.println(year);
 
-    lcd.clear();
+    // lcd.clear();
 
     // Return the time and date as a string (optional)
     char buffer[25];
     sprintf(buffer, "%02d:%02d:%02d %s | %02d/%02d/%04d", hour, now.minute(), now.second(), meridian.c_str(), month, day, year);
     return String(buffer);
 }
-
 
 // timestamp for sending to weatherdata table.
 String getISO8601TimestampUTC() {
@@ -710,26 +766,42 @@ String getISO8601TimestampUTC() {
 }
 
 //waterFlow sensor
-float waterFlowSensor(){
-    noInterrupts();
-        int pulses = pulseCount;
-        pulseCount = 0;
-        interrupts();
+float waterFlowSensor() {
+  noInterrupts();
+  int pulses = pulseCount;
+  pulseCount = 0;
+  interrupts();
 
-        float waterFlow = (pulses / calibrationFactor);
+  if (pulses < 5) { // Ignore small noise pulses
+      Serial.println("Noise detected on flow sensor!");
+      return 0.0;
+  }
 
-        return waterFlow;
+  float waterFlow = (pulses / calibrationFactor);
+
+  Serial.print("Water Flow: ");
+  Serial.print(waterFlow);
+  Serial.println(" L/min");
+
+  return waterFlow;
 }
 
 // soil moisture sensor
-void soilMoisture(){
-//soil moisture sensor
-int soilMoistureValue = analogRead(soilMoisturePin);
-Serial.print("Soil Moisture: ");
-Serial.println(soilMoistureValue);
+int soilMoisture(){
+  pinMode(soilMoisturePin, INPUT);
+  int rawValue = analogRead(soilMoisturePin);
 
-delay(1000);  
-}
+  // Ignore values that are too low (floating input issue)
+  if (rawValue < 50) {
+      Serial.println("Warning: Floating sensor input detected!");
+      return -1;
+  }
+
+  Serial.print("Soil Raw Moisture: ");
+  Serial.println(rawValue);
+
+  delay(1000);
+} 
 
 //connect to wifi
 void connectWifi(){
@@ -743,7 +815,8 @@ void connectWifi(){
 
    while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
-    Serial.print(".");
+    Serial.print("trying..");
+
   }
 
  if (WiFi.status() != WL_CONNECTED) {
@@ -772,8 +845,9 @@ void connectWifi(){
 // initialize the sensors
 void startSensors(){
    // Welcome Message
-  lcd.setCursor(4,0);
-  lcd.print("Welcome ");
+  lcd.setCursor(0,0);
+  lcd.print("Welcome ,");
+  lcd.print(userName);
   lcd.setCursor(4,1);
   lcd.print("Starting....");
   delay(5000);
@@ -801,6 +875,7 @@ void startSensors(){
  
 }
 
+
 // send sensor data
 void sendDataToServer(float temperature, float humidity, int soilMoisture, String valveStatus, float waterFlow, String currentTime, int distance) {
     if (WiFi.status() == WL_CONNECTED) {
@@ -817,6 +892,9 @@ void sendDataToServer(float temperature, float humidity, int soilMoisture, Strin
                            String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + "Z";
 
         String dataID = "D-" + String(now.unixtime()); // Generate unique data ID based on timestamp
+
+        //soil moisture value
+
 
         // Construct JSON payload
         String jsonPayload = "{";
@@ -958,17 +1036,20 @@ int calculateCropAge(DateTime plantingDate, DateTime currentDate) {
     return age.days(); // or age in weeks/months as required
 }
 
-
-
 // Function to fetch weather data from API
 void fetchWeatherData() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     // Replace with your API key and desired location
     String apiKey = "81f360187f497f7d31d712d1c08bd0e1"; // OpenWeatherMap API key
-    String city = "Nairobi";         // Replace with your city
+    String lat = "-0.4500318";         // Replace with the latitude of the location
+    String lon = "36.9163043";  
+    // String city = "Nairobi";         
     String units = "metric";        // Use "imperial" for Fahrenheit
-    String apiUrl = "https://api.openweathermap.org/data/2.5/weather?q=" + city + "&units=" + units + "&appid=" + apiKey;
+    String apiUrl = "https://api.openweathermap.org/data/2.5/weather?lat=" + lat + "&lon=" + lon + "&units=" + units + "&appid=" + apiKey;
+
+
+
 
     http.begin(apiUrl);
     int httpResponseCode = http.GET();
@@ -1088,14 +1169,284 @@ void sendWeatherDataToServer() {
   }
 }
 
+// 🌾🌾  🌾🌾  🌾🌾  🌾🌾  🌾🌾  🌾🌾  🌾🌾 algorithm to irrigate 🌾🌾  🌾🌾  🌾🌾  🌾🌾  🌾🌾 
+
+// calculate ETo using Hargreaves Equatio 
+float calculateETo(float T_mean, float T_max, float T_min) {
+    // Adjusted Hargreaves equation without Ra
+    float ETo = 0.0023 * (T_mean + 17.8) * sqrt(T_max - T_min);
+    return ETo; // ETo in mm/day
+}
+
+// get data for the ETo formular 
+void fetchLatestData(float &T_max, float &T_min, int &cloudCoverPercentage) {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin("https://midtermdocs-production.up.railway.app/api/latest_data");
+        int httpResponseCode = http.GET();
+
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            Serial.println("Latest Data Response: " + response);
+
+            // Parse JSON
+            DynamicJsonDocument doc(1024);
+            DeserializationError error = deserializeJson(doc, response);
+
+            if (!error) {
+                T_max = doc["max_temperature"].as<float>();
+                T_min = doc["min_temperature"].as<float>();
+                cloudCoverPercentage = doc["cloudCover"].as<int>();
+            } else {
+                Serial.println("JSON parsing failed");
+            }
+        } else {
+            Serial.print("HTTP GET failed, code: ");
+            Serial.println(httpResponseCode);
+        }
+
+        http.end();
+    } else {
+        Serial.println("WiFi not connected");
+    }
+}
+
+//calculate ETc
+float calculateETc(float ETo, float Kc) {
+    return ETo * Kc; // ETc in mm/day
+}
+
+//get crop id
+String getCropId(String cropName) {
+    if (cropName == "Maize") {
+        return "C001";
+    }
+    // Add more mappings as needed
+    else {
+        return "";
+    }
+}
+
+// calculate crop age to  Weeks
+int calculateCropAgeWeeks(String datePlanted) {
+    int year, month, day;
+    sscanf(datePlanted.c_str(), "%d-%d-%d", &year, &month, &day);
+    DateTime plantingDate(year, month, day);
+    DateTime currentDate = rtc.now();
+    TimeSpan age = currentDate - plantingDate;
+    return age.days() / 7; // Convert days to weeks
+}
+
+float fetchKcValue(String cropId, int cropAgeWeeks) {
+    float kcValue = 0.65; // Default Kc value
+
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        String url = "https://midtermdocs-production.up.railway.app/api/get_kc?cropid=" + cropId + "&cropageweeks=" + String(cropAgeWeeks);
+        http.begin(url);
+        int httpResponseCode = http.GET();
+
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            Serial.println("Kc Value Response: " + response);
+
+            // Parse JSON
+            DynamicJsonDocument doc(512);
+            DeserializationError error = deserializeJson(doc, response);
+
+            if (!error) {
+                kcValue = doc["kc"].as<float>();
+            } else {
+                Serial.println("JSON parsing failed");
+            }
+        } else {
+            Serial.print("HTTP GET failed, code: ");
+            Serial.println(httpResponseCode);
+        }
+
+        http.end();
+    } else {
+        Serial.println("WiFi not connected");
+    }
+
+    return kcValue;
+}
+
+// calculating soil moisture
+float calculateSoilMoistureInMM(int soilMoisturePin, int minReading, int maxReading, float maxSoilDepthMM, int numSamples = 1) {
+    int totalMoisture = 0;
+    int validReadings = 0;
+
+    // Take multiple readings for better accuracy
+    for (int i = 0; i < numSamples; i++) {
+        int currentReading = analogRead(soilMoisturePin);
+        Serial.print("Reading ");
+        Serial.print(i + 1);
+        Serial.print(": ");
+        Serial.println(currentReading);
+
+        // Only include non-zero readings
+        if (currentReading > 0) {
+            totalMoisture += currentReading;
+            validReadings++;
+        }
+
+        delay(100); // Short delay between readings to stabilize values
+    }
+
+    // Check if there are valid readings
+    if (validReadings == 0) {
+        Serial.println("No valid readings available!");
+        return 0; // Return 0 if all readings are zero
+    }
+
+    // Calculate the average moisture value
+    int averageMoistureValue = totalMoisture / validReadings;
+
+    // Debug: Print the average value
+    Serial.print("Average Moisture Value (excluding zeros): ");
+    Serial.println(averageMoistureValue);
+
+    // Convert average value to a percentage
+    float moisturePercentage = map(averageMoistureValue, minReading, maxReading, 0, 100);
+
+    // Debug: Print the percentage
+    Serial.print("Mapped Moisture Percentage: ");
+    Serial.println(moisturePercentage);
+
+    // Ensure the percentage is within valid bounds (0-100%)
+    moisturePercentage = constrain(moisturePercentage, 0, 100);
+
+    // Calculate equivalent soil moisture in mm
+    float moistureInMM = (moisturePercentage / 100.0) * maxSoilDepthMM;
+
+    // Debug: Print the final moisture in mm
+    Serial.print("Calculated Soil Moisture (mm): ");
+    Serial.println(moistureInMM);
+
+    return moistureInMM;
+}
+
+// Function to handle key-specific actions
+void handleKeyPress(char key) {
+    switch (key) {
+        case '1': // Display time
+            lcd.backlight();
+            // lcd.print("Key pressed 1");
+            // Serial.print("Key pressed is 1");
+            // delay(2000);
+            lcd.clear();
+            displayTime();
+            delay(3500);  // Allow user to read the time
+            break;
+
+        case '2': // Display temperature and humidity
+            lcd.backlight();
+            humidityTemp(temperature, humidity);
+            lcd.noBacklight();
+            lcd.clear();
+            break;
+
+        case '3': // Display valve status
+        {
+            String valveStatus = digitalRead(RELAY_PIN) ? "Open" : "Closed";
+            lcd.clear();
+            lcd.backlight();
+            lcd.setCursor(0, 0);
+            lcd.print("Valve:");
+            lcd.setCursor(0, 1);
+            lcd.print(valveStatus);
+            delay(5000);
+            lcd.noBacklight();
+            lcd.clear();
+        }
+        break;
+
+        case '4': // Display tank distance
+        {
+            int distance = getDistance();
+            lcd.clear();
+            lcd.backlight();
+            lcd.setCursor(0, 0);
+            lcd.print("Water Distance :");
+            lcd.setCursor(0, 1);
+            lcd.print(distance);
+            lcd.print("cm");
+            delay(3500);
+            lcd.noBacklight();
+            lcd.clear();
+        }
+        break;
+
+        case '5': // Display water flow rate
+        {
+            float waterFlow = waterFlowSensor();
+            lcd.clear();
+            lcd.backlight();
+            lcd.setCursor(0, 0);
+            lcd.print("Water Flow  :");
+            lcd.setCursor(0, 1);
+            lcd.print(waterFlow);
+            lcd.print("L/min");
+            delay(3500);
+            lcd.noBacklight();
+            lcd.clear();
+        }
+        break;
+
+        case '6': // Test solenoid valve
+            lcd.backlight();
+            lcd.clear();
+            lcd.print("Key pressed: ");
+            lcd.println(key);
+            Serial.println("$$$$$$$$$$$$$$$$$$ Solenoid Activated");
+            digitalWrite(RELAY_PIN, HIGH);
+            delay(10000);
+            digitalWrite(RELAY_PIN, LOW);
+            Serial.println("Solenoid deactivated");
+            break;
+
+        case '7': // Display soil moisture
+        {
+            lcd.backlight();
+            lcd.clear();
+            int soilMoistureVal = analogRead(soilMoisturePin);
+            // int soilMoistureMM = calculateSoilMoistureInMM(soilMoisturePin,minReading,maxReading, maxSoilDepthMM);
+            int rawSoil = soilMoisture();
+            Serial.print("Soil moisture in MM: ");
+            Serial.println(rawSoil);
+            lcd.setCursor(0,0);
+            lcd.print("Moisture in mm:");
+            lcd.setCursor(0, 1);
+            lcd.print(rawSoil);
+            delay(3000);
+            lcd.clear();
+        }
+        break;
+
+        case '#': // Logout
+            userLoggedIn = false;
+            lcd.backlight();
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Logged Out");
+            delay(3000);
+            lcd.clear();
+            break;
+
+        default: // For other keys, do nothing
+            Serial.println("Invalid key pressed");
+            break;
+    }
+}
+
+
 
 
 // 🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁🏁
 void setup() {
 Serial.begin(115200);
-
-   
-
+  
   //seting up the 5v relay
   pinMode(RELAY_PIN,OUTPUT); // set this pin as an output
   digitalWrite(RELAY_PIN,LOW);  // the solenoid starts closed
@@ -1113,9 +1464,6 @@ Serial.begin(115200);
   //connecting to wifi
   connectWifi();
 
-  // initialize the sensors
-  startSensors();
-
   // login
     if (!userLoggedIn) {
         lcd.clear();
@@ -1125,23 +1473,25 @@ Serial.begin(115200);
         userLogin(); // Prompt for login
     }
 
+  // initialize the sensors
+  startSensors();
+
+   //board status
+    boardStatus();
+  
   //initialize the RTC module
   timeModuleCheck();
 
-  boardStatus();
-
-
- lcd.noBacklight();
-  pinMode(soilMoisturePin, INPUT);
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(TRIG_PIN, OUTPUT); // sends signal from ESP to sensor
-  pinMode(ECHO_PIN, INPUT);  // gets data/signal from the sensor.
-  
-  
+ // turn off backlight of lcd
+   lcd.noBacklight();
+    pinMode(soilMoisturePin, INPUT);
+    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(TRIG_PIN, OUTPUT); // sends signal from ESP to sensor
+    pinMode(ECHO_PIN, INPUT);  // gets data/signal from the sensor.
+     
   // Initialize DHT Sensor
   dht.begin();
   checkDHT();
-
 
   // Initialize all readings to zero
   for (int i = 0; i < numReadings; i++) {
@@ -1152,6 +1502,7 @@ Serial.begin(115200);
 }
 // 🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂🔂
 void loop() {
+
    // powering esp32
     if (millis() - lastFetchTime >= fetchInterval) {
         Serial.println("Refreshing controller state...");
@@ -1165,12 +1516,15 @@ void loop() {
         lcd.clear();
     }
 
-    //restart the board.
-    esp_sleep_enable_timer_wakeup(10 * 1000000); // Wake up after 10 seconds
-    esp_deep_sleep_start();
 
-  // check if a key is pressed
-  char key = keypad.getKey();
+  // regular keypad intervals
+    if (millis() - previousKeypadTime >= keypadInterval) {
+        previousKeypadTime = millis();
+        char key = keypad.getKey();  // Check for key press
+        if (key) {
+            handleKeyPress(key);  // Handle key press actions
+        }
+    }
 
    // If logged in, handle the logout action
     if (!userLoggedIn) {
@@ -1179,20 +1533,8 @@ void loop() {
         return;       
     }
 
+// Serial.println(String("<<<<<>>>>>>>>>>") + key);
 
-     // Handle logout if the user is logged in
-    if (key == '#') { // Logout key
-        userLoggedIn = false;
-        lcd.backlight();
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Logged Out");
-        delay(3000);
-        lcd.clear();
-        return; 
-    }
-
-  Serial.println("<<<<<>>>>>>>>>>"+key);
 
 // turn of the screen
  if (millis() - lastKeyPressTime > backlightTimeout) {
@@ -1207,87 +1549,12 @@ void loop() {
   }
  
 
- // display the time
-  if (key == '1'){
-    displayTime();
-    delay(3500);
-    lcd.clear();
-  }
-
-//display temp and humidity
-  if(key == '2'){
-    lcd.backlight();
-    humidityTemp(temperature,humidity);
-    lcd.noBacklight();
-    lcd.clear();
-  }
-
-// display the valve status
-  if(key == '3'){
-     String valveStatus = digitalRead(RELAY_PIN) ? "Open" : "Closed";
-     lcd.clear();
-     lcd.backlight();
-     lcd.setCursor(0,0);
-     lcd.print("Valve:");
-     lcd.setCursor(0,1);
-     lcd.print(valveStatus);
-     delay(5000);
-     lcd.noBacklight();
-     lcd.clear();
-  }
-
-  // display tank distance
-  if(key == '4'){
-    int distance = getDistance();
-     lcd.clear();
-     lcd.backlight();
-     lcd.setCursor(0,0);
-     lcd.print("Water Distance :");
-     lcd.setCursor(0,1);
-     lcd.print(distance);
-     lcd.print("cm");
-     delay(3500);
-     lcd.noBacklight();
-     lcd.clear();
-  }
-
-  // display the flow rate
-
-  if(key == '5'){
-     float waterFlow = waterFlowSensor();
-     lcd.clear();
-     lcd.backlight();
-     lcd.setCursor(0,0);
-     lcd.print("Water Flow  :");
-     lcd.setCursor(0,1);
-     lcd.print(waterFlow);
-     lcd.print("L/min");
-     delay(3500);
-     lcd.noBacklight();
-     lcd.clear();
-
-  }
   //send weather data
   if(millis() - lastpullTime >= sendWeatherInterval){
-
      fetchWeatherData();           // Fetch data from the weather API
      sendWeatherDataToServer();    // Send the fetched data to your server
-
     lastpullTime = millis();
 
-  }
-
-  // test Solenoid valve
-  if (key == '6'){
-    lcd.backlight();
-    lcd.clear();
-    lcd.print("Key pressed: ");
-    lcd.println(key);
-    Serial.println("$$$$$$$$$$$$$$$$$$ Solenoid Activated");
-    digitalWrite(RELAY_PIN,HIGH);
-    delay(10000);
-    digitalWrite(RELAY_PIN,LOW);
-    Serial.println("Solenoid deactivated");
   }
 
     // send sensor data
@@ -1316,6 +1583,125 @@ void loop() {
         readSensorData(temperature, humidity, soilMoistureValue, valveStatus, waterFlow, currentTime, distance);
         lastSendTime = millis();
     }
+
+  // here we read the analog pin value.
+     int soilMoistureValue = analogRead(soilMoisturePin);
+
+      if (millis() - lastSoilCheckTime >= soilCheckInterval) {
+              lastSoilCheckTime = millis(); // Update the last check time
+
+
+              // Check if soil moisture is below the threshold
+              if (soilMoistureValue < soilMoistureThreshold) {
+                  Serial.println("Soil moisture below threshold, fetching data...");
+                  lcd.clear();
+                  lcd.setCursor(0,0);
+                  lcd.print("Soil moisture");
+                  lcd.setCursor(0,1);
+                  lcd.println("Low..");
+                  delay(3000);
+                  
+                  // Start state irrigation proccess
+                  irrigationState = IRRIGATION_RUNNING;
+
+                  // Calculate crop age in weeks
+                  int cropAgeWeeks = calculateCropAgeWeeks(datePlanted);
+
+                  // Fetch the crop coefficient (Kc) based on crop age
+                  float Kc = fetchKcValue(cropId, cropAgeWeeks);
+
+                  // Fetch the latest weather data
+                  float T_max, T_min;
+                  int cloudCoverPercentage;
+                  fetchLatestData(T_max, T_min, cloudCoverPercentage);
+
+                  // Calculate T_mean
+                  float T_mean = (T_max + T_min) / 2.0;
+
+                  // Calculate ETo using the fetched weather data
+                  float ETo = calculateETo(T_mean, T_max, T_min);
+                  Serial.print("Calculated ETo: ");
+                  Serial.println(ETo);
+
+                  // Recalculate Kc if necessary (e.g., crop age updated)
+                  cropAgeWeeks = calculateCropAgeWeeks(datePlanted);
+                  Kc = fetchKcValue(cropId, cropAgeWeeks);
+                  Serial.print("Kc Value: ");
+                  Serial.println(Kc);
+
+                  // Calculate ETc based on ETo and Kc
+                  float ETc = ETo * Kc;
+                  Serial.print("Calculated ETc: ");
+                  Serial.println(ETc);
+
+              } else {
+                  Serial.println("Soil moisture is sufficient. No need to fetch data.");
+              }
+          }
+
+  // irrigation state switch case.   
+
+    switch(irrigationState) {
+      case IRRIGATION_IDLE:
+            if (soilMoistureValue < soilMoistureThreshold) {
+                  // Start irrigation
+                  digitalWrite(RELAY_PIN, HIGH); // Open valve
+                  irrigationStartTime = millis();
+                  irrigationState = IRRIGATION_RUNNING;
+                  Serial.println("Irrigation started");
+
+                  // Display on LCD
+                  lcd.clear();
+                  lcd.backlight();
+                  lcd.print("Irrigation ON");
+              }
+              break;
+
+        case IRRIGATION_RUNNING:
+              if (millis() - irrigationStartTime >= irrigationDurationMillis) {
+                  // Stop irrigation
+                  digitalWrite(RELAY_PIN, LOW); // Close valve
+                  irrigationState = IRRIGATION_WAITING;
+                  Serial.println("Irrigation stopped");
+
+                  // Display on LCD
+                  lcd.clear();
+                  lcd.print("Irrigation OFF");
+
+                  // Start waiting period
+                  irrigationStartTime = millis();
+              }
+              break;
+
+        case IRRIGATION_WAITING:
+              if (millis() - irrigationStartTime >= 5000) { // Wait 5 seconds
+                  // Check soil moisture again
+                  soilMoistureValue = analogRead(soilMoisturePin);
+                  if (soilMoistureValue < soilMoistureThreshold) {
+                      // Start irrigation again
+                      digitalWrite(RELAY_PIN, HIGH); // Open valve
+                      irrigationStartTime = millis();
+                      irrigationState = IRRIGATION_RUNNING;
+                      Serial.println("Irrigation restarted");
+
+                      // Display on LCD
+                      lcd.clear();
+                      lcd.print("Irrigation ON");
+                  } else {
+                      // Soil moisture is sufficient
+                      irrigationState = IRRIGATION_IDLE;
+                      Serial.println("Soil moisture sufficient");
+
+                      // Display on LCD
+                      lcd.clear();
+                      lcd.print("Soil Moist OK");
+                      delay(2000);
+                      lcd.noBacklight();
+                  }
+              }
+              break;
+      }
+
 
   delay(50);  // Delay for stability between readings
 }
