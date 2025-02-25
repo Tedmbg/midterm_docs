@@ -1,0 +1,9 @@
+>The esp32-s2 and s3
+- has an improved 32-bit processor codew LX7 complared to the old LX6
+- More GPO pins and storage of upto 1GB memory
+- We can also have better loads speeds.
+- The s3 has wifi andb bluetooth while the S2 only has wifi
+
+>The esp c series
+- They are smaller and less powerfull
+- their are c2 c3 c6

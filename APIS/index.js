@@ -259,7 +259,6 @@ app.post("/add/user", async (req, res) => {
   }
 });
 
-
 // Route to insert sensor data
 app.post("/add/sensor_data", async (req, res) => {
   const {
@@ -444,8 +443,6 @@ app.get('/api/irrigationschedule/card2', async (req, res) => {
     }
   });
   
- 
-
 // Route to get the current state
 app.get('/api/controller/state', (req, res) => {
     res.json({ status: 'success', isControllerOn });
@@ -574,8 +571,6 @@ app.get('/api/get_kc', async (req, res) => {
       res.status(500).json({ error: 'Database query failed' });
   }
 });
-
-
 
 // Start the server
 const port = process.env.PORT || 3000; // Use the PORT environment variable or default to 3000

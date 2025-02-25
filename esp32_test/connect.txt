@@ -57,3 +57,18 @@ SCL -- GPIO22
 VCC -- 3.3v
 GND -- GND
 AO(Analog output) -- GPIO 34
+
+🦶🏼🦶🏼 connecting the batteries
+-Connect the positive terminal of the first battery to the negative terminal of the second battery.
+-Connect the positive terminal of the second battery to the negative terminal of the third battery.
+
+
+🚡🚡 connecting the buckbooster XL6009
+- the COM port is connected to the +ve out 
+- the -ve port is connected to the sollenoid.
+
+connecting the sim800l
+vcc
+GND
+TX GPIO 16
+RX GPIO 17
